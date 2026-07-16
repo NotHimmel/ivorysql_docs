@@ -1,0 +1,223 @@
+:sectnums:
+:sectnumlevels: 5
+
+= set_user
+
+== Overview
+set_user is a PostgreSQL extension developed by Crunchy Data as part of the pgaudit project. It addresses a classic operational security dilemma: DBAs need superuser privileges to perform maintenance tasks, but handing out login-enabled superuser accounts grants excessive privileges and leaves their actions unauditable—the native SET ROLE neither writes to the log nor prevents a user from casually disabling log settings and switching back without a trace.
+
+Project URL: <https://github.com/pgaudit/set_user>
+
+Version: REL4_2_0
+
+License: PostgreSQL License
+
+== How It Works
+
+PostgreSQL's native `SET ROLE` / `SET SESSION AUTHORIZATION` has two security weaknesses. First, after escalating privileges a user can casually run `SET log_statement = 'none'` to disable logging, then `RESET ROLE` to quietly switch back, leaving no audit trail. Second, to let DBAs perform superuser tasks you typically have to give them direct login access to a superuser account—too much privilege, and uncontrollable.
+
+set_user's approach is "don't forbid escalation, but make every escalation traceable and undeniable." Once deployed, all superuser accounts can be set to NOLOGIN; DBAs log in with ordinary accounts and call set_user_u('postgres') to escalate when needed. Throughout the entire window from escalation until reset_user() restores the original identity: the role switch is written to the log, log_statement is forced to all so every SQL statement is persisted, and the log prefix automatically gets an AUDIT tag appended for easy filtering and alerting. At the same time, ALTER SYSTEM, COPY PROGRAM, SET log_statement, SET ROLE, the set_config() backdoor, and every other channel that could undermine auditing or allow identity escape are all blocked. Because session_user always remains the real logged-in user, "who did what, when, and under which identity" is plainly visible in the log.
+
+In terms of implementation, it is loaded as a C extension via shared_preload_libraries and relies on three core kernel mechanisms: the ProcessUtility_hook intercepts dangerous statements, the object_access_hook seals off function-level backdoors, and a transaction commit callback ensures the switch is transaction-safe. Privilege control uses a dual-gate design—the SQL-layer GRANT EXECUTE determines who may call the functions, while the configuration-layer allowlists (superuser_allowlist, etc.) can be hot-adjusted at any time to tighten access. It also provides a token-locked set_user(user, token) to prevent escape when a connection pool holds connections on behalf of others, as well as an irreversible set_session_auth() for permanent privilege reduction before handing off a connection.
+
+set_user cannot stop a superuser from acting maliciously—its purpose is to ensure that no privileged operation can escape auditing. Combined with a log-alerting system, it forms a key part of a least-privilege operations framework for PostgreSQL.
+
+== Usage
+
+[NOTE]
+You need to add `set_user` to `shared_preload_libraries`. If other plugins implement `post-execution hooks`, then `set_user` must be listed before those plugins.
+
+[IMPORTANT]
+Superuser accounts (such as postgres) should be set to NOLOGIN. DBAs log in with an ordinary account and call `set_user_u('postgres')` to escalate when needed.
+
+** Configuration
+
+[cols="1,1,1,1", options="header"]
+|===
+| Setting | Description | Example | Function
+| set_user.block_alter_system | `on` (default) or `off` | `on` | Block the ALTER SYSTEM command
+| set_user.block_copy_program | `on` (default) or `off` | `on` | Block the COPY PROGRAM command
+| set_user.block_log_statement | `on` (default) or `off` | `on` | Block changes to log_statement
+| set_user.nosuperuser_target_allowlist | wildcard '*' (default) or string | 'dba1, dba2, +admin_group' | List of target roles that set_user() is allowed to switch to
+| set_user.superuser_allowlist | wildcard '*' (default) or string | 'dba1, dba2, +admin_group' | List of users allowed to call set_user_u() to escalate
+| set_user.superuser_audit_tag | string | 'AUDIT' | Log prefix tag
+| set_user.exit_on_error | `on` (default) or `off` | `on` | Whether to terminate the current session when an error occurs
+|===
+
+
+** Functions
+
+[cols="1,1,1,1", options="header"]
+|===
+| Function | Default Privilege | Parameters | Description
+| `set_user(text)` | REMOVE FROM PUBLIC | target non-superuser username | Switch the current session's user identity to the specified non-superuser user
+| `set_user(text, text)` | REMOVE FROM PUBLIC | target non-superuser username, random token | Same as above, but requires a random token for added security
+| `set_user_u(text)` | REMOVE FROM PUBLIC | target superuser username | Switch the current session's user identity to the specified superuser user
+| `reset_user()` | GRANT TO PUBLIC | none | Restore the current session's user identity to the original user
+| `reset_user(text)` | GRANT TO PUBLIC | random token | Token-protected restore, requires the corresponding token
+| `set_session_auth(text)` | REMOVE FROM PUBLIC | target non-superuser username | Similar to `SET SESSION AUTHORIZATION`, but can only switch to an ordinary user and cannot switch back
+|===
+
+== Installation
+
+[TIP]
+The source-build test environment is Ubuntu 26.04. IvorySQL must be installed; for detailed installation steps, see: <https://github.com/IvorySQL/IvorySQL>
+
+=== Source Installation
+
+** Set the IvorySQL installation path
+[source,bash]
+----
+export IVY_BIN_DIR=/usr/local/ivorysql/bin
+export TEST_DB_DIR=/tmp/test_db
+----
+
+** Get the source code
+[source,bash]
+----
+git clone https://github.com/pgaudit/set_user.git
+cd set_user
+git checkout REL4_2_0
+----
+
+** Build and install
+[source,bash]
+----
+make USE_PGXS=1 PG_CONFIG=${IVY_BIN_DIR}/pg_config clean
+make USE_PGXS=1 PG_CONFIG=${IVY_BIN_DIR}/pg_config
+make USE_PGXS=1 PG_CONFIG=${IVY_BIN_DIR}/pg_config install
+----
+
+** Configure
+[source,ini]
+----
+shared_preload_libraries = 'set_user'
+----
+
+=== Create a Test Database
+
+[NOTE]
+You need to add `set_user` to `shared_preload_libraries`.
+
+** Initialize the database
+[source,bash]
+----
+# Initialize the database
+${IVY_BIN_DIR}/initdb -U postgres -D ${TEST_DB_DIR}
+
+# Add set_user to shared_preload_libraries (this can also be configured manually)
+sed -i "s/\(shared_preload_libraries = '.*\)'/\1, set_user'/g" ${TEST_DB_DIR}/ivorysql.conf
+
+# Change the PG port and the Oracle-compatible port to avoid conflicts
+cat << EOF >> ${TEST_DB_DIR}/ivorysql.conf
+ivorysql.port = 1522
+port = 5433
+EOF
+
+# Start the test database
+${IVY_BIN_DIR}/pg_ctl -D ${TEST_DB_DIR} -l ${TEST_DB_DIR}/logfile start
+----
+
+=== Usage Test
+
+** Connect to the database
+
+[source,bash]
+----
+PGHOST=127.0.0.1 PGPORT=1522 PGUSER=postgres $IVY_BIN_DIR/psql
+----
+
+** Testing Examples
+
+[TIP]
+This uses the default configuration, i.e. the allowlist is '*'.
+
+[source,sql]
+----
+CREATE EXTENSION set_user;
+LOAD 'set_user';
+
+--- Create two users
+CREATE USER dba;
+CREATE USER bob;
+
+-- Allow dba to execute set_user()
+GRANT EXECUTE ON FUNCTION set_user(text) TO dba;
+GRANT EXECUTE ON FUNCTION set_user(text,text) TO dba;
+GRANT EXECUTE ON FUNCTION set_user_u(text) TO dba;
+
+-- Switch to user dba to simulate a dba login
+SET SESSION AUTHORIZATION dba;
+SELECT SESSION_USER, CURRENT_USER;
+ session_user | current_user 
+--------------+--------------
+ dba          | dba
+(1 row)
+
+--- Escalate: using set_user() here fails because the target user is a superuser
+SELECT set_user('postgres');
+ERROR:  switching to superuser not allowed
+HINT:  Use 'set_user_u' to escalate.
+
+--- Escalate: using set_user_u() here succeeds
+SELECT set_user_u('postgres');
+ set_user_u 
+------------
+ OK
+(1 row)
+
+--- Check the user state after escalation
+SELECT SESSION_USER, CURRENT_USER;
+ session_user | current_user 
+--------------+--------------
+ dba          | postgres
+(1 row)
+
+--- Test calling set_user again; this fails
+SELECT set_user('bob');
+ERROR:  must reset previous user prior to setting again
+
+--- While escalated, test that ALTER SYSTEM fails
+ALTER SYSTEM SET wal_level = minimal;
+ERROR:  ALTER SYSTEM blocked by set_user config
+
+--- While escalated, test that COPY PROGRAM fails
+COPY (select 42) TO PROGRAM 'cat';
+ERROR:  COPY PROGRAM blocked by set_user config
+
+--- While escalated, test that SET log_statement fails
+SET log_statement = 'none';
+ERROR:  "SET log_statement" blocked by set_user config
+
+--- Restore the original user
+SELECT reset_user();
+SELECT SESSION_USER, CURRENT_USER;
+ session_user | current_user 
+--------------+--------------
+ dba          | dba
+(1 row)
+----
+
+Checking the `logfile` shows that all operations after escalation were recorded, and the log prefix carries the `AUDIT` tag.
+
+[source,log]
+----
+2026-07-16 16:01:21.193 CST [2644289] AUDIT: LOG:  statement: SELECT SESSION_USER, CURRENT_USER;
+2026-07-16 16:01:43.825 CST [2644289] AUDIT: LOG:  statement: SELECT set_user('bob');
+2026-07-16 16:01:43.829 CST [2644289] AUDIT: ERROR:  must reset previous user prior to setting again
+2026-07-16 16:01:43.829 CST [2644289] AUDIT: STATEMENT:  SELECT set_user('bob');
+2026-07-16 16:02:20.177 CST [2644289] AUDIT: LOG:  statement: ALTER SYSTEM SET wal_level = minimal;
+2026-07-16 16:02:20.177 CST [2644289] AUDIT: ERROR:  ALTER SYSTEM blocked by set_user config
+2026-07-16 16:02:20.177 CST [2644289] AUDIT: STATEMENT:  ALTER SYSTEM SET wal_level = minimal;
+----
+
+=== Clean Up the Test Database
+
+[source,bash]
+----
+# Stop the test database
+${IVY_BIN_DIR}/pg_ctl -D ${TEST_DB_DIR} -l ${TEST_DB_DIR}/logfile stop
+
+# Delete the test database
+rm -rf ${TEST_DB_DIR}
+----

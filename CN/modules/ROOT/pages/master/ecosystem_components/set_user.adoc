@@ -150,53 +150,53 @@ GRANT EXECUTE ON FUNCTION set_user_u(text) TO dba;
 -- 切换到用户 dba，模拟dba登录
 SET SESSION AUTHORIZATION dba;
 SELECT SESSION_USER, CURRENT_USER;
- session_user | current_user 
---------------+--------------
- dba          | dba
-(1 row)
+---  session_user | current_user 
+--- --------------+--------------
+---  dba          | dba
+--- (1 row)
 
 --- 提权， 这里使用 set_user() 提权失败，因为目标用户是 superuser
 SELECT set_user('postgres');
-ERROR:  switching to superuser not allowed
-HINT:  Use 'set_user_u' to escalate.
+--- ERROR:  switching to superuser not allowed
+--- HINT:  Use 'set_user_u' to escalate.
 
 --- 提权， 这里使用 set_user_u() 提权成功
 SELECT set_user_u('postgres');
- set_user_u 
-------------
- OK
-(1 row)
+---  set_user_u 
+--- ------------
+---  OK
+--- (1 row)
 
 --- 查看提权后的用户状态
 SELECT SESSION_USER, CURRENT_USER;
- session_user | current_user 
---------------+--------------
- dba          | postgres
-(1 row)
+---  session_user | current_user 
+--- --------------+--------------
+---  dba          | postgres
+--- (1 row)
 
 --- 测试重复 set_user，会失败
 SELECT set_user('bob');
-ERROR:  must reset previous user prior to setting again
+--- ERROR:  must reset previous user prior to setting again
 
 --- 提权中，测试 ALTER SYSTEM 会失败
 ALTER SYSTEM SET wal_level = minimal;
-ERROR:  ALTER SYSTEM blocked by set_user config
+--- ERROR:  ALTER SYSTEM blocked by set_user config
 
 --- 提权中，测试 COPY PROGRAM 会失败
 COPY (select 42) TO PROGRAM 'cat';
-ERROR:  COPY PROGRAM blocked by set_user config
+--- ERROR:  COPY PROGRAM blocked by set_user config
 
 --- 提权中，测试 SET log_statement 会失败
 SET log_statement = 'none';
-ERROR:  "SET log_statement" blocked by set_user config
+--- ERROR:  "SET log_statement" blocked by set_user config
 
 --- 恢复初始用户
 SELECT reset_user();
 SELECT SESSION_USER, CURRENT_USER;
- session_user | current_user 
---------------+--------------
- dba          | dba
-(1 row)
+---  session_user | current_user 
+--- --------------+--------------
+---  dba          | dba
+--- (1 row)
 ----
 
 查看 `logfile` 能看到提权后的所有操作都被记录了下来，并且日志前缀带有 `AUDIT` 标签。

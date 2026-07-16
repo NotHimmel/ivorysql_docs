@@ -149,53 +149,53 @@ GRANT EXECUTE ON FUNCTION set_user_u(text) TO dba;
 -- Switch to user dba to simulate a dba login
 SET SESSION AUTHORIZATION dba;
 SELECT SESSION_USER, CURRENT_USER;
- session_user | current_user 
---------------+--------------
- dba          | dba
-(1 row)
+---  session_user | current_user 
+--- --------------+--------------
+---  dba          | dba
+--- (1 row)
 
 --- Escalate: using set_user() here fails because the target user is a superuser
 SELECT set_user('postgres');
-ERROR:  switching to superuser not allowed
-HINT:  Use 'set_user_u' to escalate.
+--- ERROR:  switching to superuser not allowed
+--- HINT:  Use 'set_user_u' to escalate.
 
 --- Escalate: using set_user_u() here succeeds
 SELECT set_user_u('postgres');
- set_user_u 
-------------
- OK
-(1 row)
+---  set_user_u 
+--- ------------
+---  OK
+--- (1 row)
 
 --- Check the user state after escalation
 SELECT SESSION_USER, CURRENT_USER;
- session_user | current_user 
---------------+--------------
- dba          | postgres
-(1 row)
+---  session_user | current_user 
+--- --------------+--------------
+---  dba          | postgres
+--- (1 row)
 
 --- Test calling set_user again; this fails
 SELECT set_user('bob');
-ERROR:  must reset previous user prior to setting again
+--- ERROR:  must reset previous user prior to setting again
 
 --- While escalated, test that ALTER SYSTEM fails
 ALTER SYSTEM SET wal_level = minimal;
-ERROR:  ALTER SYSTEM blocked by set_user config
+--- ERROR:  ALTER SYSTEM blocked by set_user config
 
 --- While escalated, test that COPY PROGRAM fails
 COPY (select 42) TO PROGRAM 'cat';
-ERROR:  COPY PROGRAM blocked by set_user config
+--- ERROR:  COPY PROGRAM blocked by set_user config
 
 --- While escalated, test that SET log_statement fails
 SET log_statement = 'none';
-ERROR:  "SET log_statement" blocked by set_user config
+--- ERROR:  "SET log_statement" blocked by set_user config
 
 --- Restore the original user
 SELECT reset_user();
 SELECT SESSION_USER, CURRENT_USER;
- session_user | current_user 
---------------+--------------
- dba          | dba
-(1 row)
+---  session_user | current_user 
+--- --------------+--------------
+---  dba          | dba
+--- (1 row)
 ----
 
 Checking the `logfile` shows that all operations after escalation were recorded, and the log prefix carries the `AUDIT` tag.

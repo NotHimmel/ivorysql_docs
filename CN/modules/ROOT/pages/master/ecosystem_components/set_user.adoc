@@ -5,7 +5,7 @@
 = set_user
 
 == 概述
-set_user 是由 Crunchy Data 开发、隶属 pgaudit 项目的 PostgreSQL 扩展，用于解决一个经典的运维安全矛盾：DBA 需要超级用户权限执行维护任务，但直接发放可登录的 superuser 账号意味着权限过大且行为无从审计——原生的 SET ROLE 既不留日志，还能随手关掉日志设置、无痕切回。
+set_user 是 PostgreSQL 安全审计扩展，由 pgaudit 项目维护，优化原生角色切换能力。支持普通用户间互切，也可受控切换至超级用户；可配置白名单限定允许切换的账号，所有切换操作留存审计日志，切换到超级用户时强制完整记录 SQL，拦截修改数据库配置、调用系统命令等高风险操作，规范临时提权，满足等保合规，部署需预加载插件并重启数据库，再建扩展使用。
 
 项目地址：<https://github.com/pgaudit/set_user>
 
@@ -197,12 +197,30 @@ SELECT SESSION_USER, CURRENT_USER;
 --- --------------+--------------
 ---  dba          | dba
 --- (1 row)
+
+--- 切换到普通用户bob
+SELECT set_user('bob');
+SELECT SESSION_USER, CURRENT_USER;
+---  session_user | current_user 
+--- --------------+--------------
+---  dba          | bob
+--- (1 row)
+
+--- 恢复初始用户
+SELECT reset_user();
+SELECT SESSION_USER, CURRENT_USER;
+---  session_user | current_user 
+--- --------------+--------------
+---  dba          | dba
+--- (1 row)
 ----
 
-查看 `logfile` 能看到提权后的所有操作都被记录了下来，并且日志前缀带有 `AUDIT` 标签。
+查看 `logfile` 能看到提权后的所有操作都被记录了下来，并且日志前缀带有 `AUDIT` 标签。每个用户切换都有一条： `LOG:  XXX transitioning to YYY` 对应。
 
 [source,log]
 ----
+2026-07-17 13:55:34.905 CST [2670610] LOG:  Role dba transitioning to Superuser Role postgres
+2026-07-17 13:55:34.905 CST [2670610] STATEMENT:  SELECT set_user_u('postgres');
 2026-07-16 16:01:21.193 CST [2644289] AUDIT: LOG:  statement: SELECT SESSION_USER, CURRENT_USER;
 2026-07-16 16:01:43.825 CST [2644289] AUDIT: LOG:  statement: SELECT set_user('bob');
 2026-07-16 16:01:43.829 CST [2644289] AUDIT: ERROR:  must reset previous user prior to setting again
@@ -210,6 +228,15 @@ SELECT SESSION_USER, CURRENT_USER;
 2026-07-16 16:02:20.177 CST [2644289] AUDIT: LOG:  statement: ALTER SYSTEM SET wal_level = minimal;
 2026-07-16 16:02:20.177 CST [2644289] AUDIT: ERROR:  ALTER SYSTEM blocked by set_user config
 2026-07-16 16:02:20.177 CST [2644289] AUDIT: STATEMENT:  ALTER SYSTEM SET wal_level = minimal;
+2026-07-17 13:56:26.924 CST [2670610] STATEMENT:  SELECT set_user_u('postgres');
+2026-07-17 14:01:12.017 CST [2670610] AUDIT: LOG:  statement: select reset_user();
+2026-07-17 14:01:12.017 CST [2670610] AUDIT: LOG:  Superuser Role postgres transitioning to Role dba
+2026-07-17 14:18:42.884 CST [2671784] LOG:  Role dba transitioning to Role bob
+2026-07-17 14:18:42.884 CST [2671784] STATEMENT:  select set_user('bob');
+2026-07-17 14:18:53.301 CST [2671784] LOG:  Role bob transitioning to Role dba
+2026-07-17 14:18:53.301 CST [2671784] STATEMENT:  select reset_user();
+2026-07-17 14:26:16.737 CST [2671784] LOG:  Role dba transitioning to Role bob
+2026-07-17 14:26:16.737 CST [2671784] STATEMENT:  SELECT set_user('bob');
 ----
 
 === 清理测试数据库

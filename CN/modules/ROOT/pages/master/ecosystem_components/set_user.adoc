@@ -5,7 +5,7 @@
 = set_user
 
 == 概述
-set_user 是 PostgreSQL 安全审计扩展，由 pgaudit 项目维护，优化原生角色切换能力。支持普通用户间互切，也可受控切换至超级用户；可配置白名单限定允许切换的账号，所有切换操作留存审计日志，切换到超级用户时强制完整记录 SQL，拦截修改数据库配置、调用系统命令等高风险操作，规范临时提权，满足等保合规，部署需预加载插件并重启数据库，再建扩展使用。
+set_user 是 PostgreSQL 安全审计扩展，由 pgaudit 项目维护，优化原生用户切换能力。支持普通用户间互切，也可受控切换至超级用户；可配置白名单限定允许切换的用户，所有切换操作留存审计日志，切换到超级用户时强制完整记录 SQL，拦截修改数据库配置、调用系统命令等高风险操作，规范临时提权，部署需预加载插件并重启数据库，再创建扩展使用。
 
 项目地址：<https://github.com/pgaudit/set_user>
 
@@ -17,7 +17,7 @@ set_user 是 PostgreSQL 安全审计扩展，由 pgaudit 项目维护，优化�
 
 PostgreSQL原生的 `SET ROLE` / `SET SESSION AUTHORIZATION` 有两个安全短板：一是提权后可以随手 `SET log_statement = 'none'` 关掉日志、`RESET ROLE` 悄悄切回来，审计留不下痕迹；二是要让 DBA 能干超级用户的活，通常得给他们能直接登录 superuser 账号，权限过大且不可控。
 
-set_user 的思路是"不禁止提权，但让提权全程留痕、无法抵赖"。部署后，所有超级用户账号可设为 NOLOGIN，DBA 以普通账号登录，需要时调用 set_user_u('postgres') 提权。从提权到 reset_user() 恢复的整个窗口内：角色切换被记入日志，log_statement 被强制改为 all 使每条 SQL 落盘，日志前缀自动追加 AUDIT 标签便于过滤告警；同时 ALTER SYSTEM、COPY PROGRAM、SET log_statement、SET ROLE 及 set_config() 后门等所有可能破坏审计或逃逸身份的通道被全部封锁。由于 session_user 始终保持真实登录者，"谁在什么时候以什么身份做了什么"在日志中一目了然。
+set_user 的思路是"不禁止提权，但让提权全程留痕、无法抵赖"。部署后，所有超级用户账号可设为 NOLOGIN，DBA 以普通账号登录，需要时调用 set_user_u('postgres') 提权。从提权到 reset_user() 恢复的整个窗口内：用户切换被记入日志，log_statement 被强制改为 all 使每条 SQL 落盘，日志前缀自动追加 AUDIT 标签便于过滤告警；同时 ALTER SYSTEM、COPY PROGRAM、SET log_statement、SET ROLE 及 set_config() 后门等所有可能破坏审计或逃逸身份的通道被全部封锁。由于 session_user 始终保持真实登录者，"谁在什么时候以什么身份做了什么"在日志中一目了然。
 
 实现上，它以 C 扩展形式通过 shared_preload_libraries 加载，核心依赖三个内核机制：ProcessUtility_hook 拦截危险语句，object_access_hook 封堵函数级后门，事务提交回调保证切换的事务安全。权限控制采用双闸设计——SQL 层的 GRANT EXECUTE 决定谁能调用，配置层的白名单（superuser_allowlist 等）可随时热调整收口。此外还提供带口令锁的 set_user(user, token) 供连接池代持连接时防逃逸，以及不可逆的 set_session_auth() 用于连接移交前的永久降权。
 
@@ -39,7 +39,7 @@ superuser 账号（如 postgres）需要设为 NOLOGIN，DBA 用普通账号登�
 | set_user.block_alter_system | `on` （默认）或者 `off` | `on` | 阻止 ALTER SYSTEM 命令
 | set_user.block_copy_program | `on` （默认）或者 `off` | `on` | 阻止 COPY PROGRAM 命令
 | set_user.block_log_statement | `on` （默认）或者 `off` | `on` | 阻止修改 log_statement
-| set_user.nosuperuser_target_allowlist | 通配符 '*' （默认）或字符串 | 'dba1, dba2, +admin_group' | 允许 set_user() 切换到的目标角色名单
+| set_user.nosuperuser_target_allowlist | 通配符 '*' （默认）或字符串 | 'dba1, dba2, +admin_group' | 允许 set_user() 切换到的目标用户名单
 | set_user.superuser_allowlist | 通配符 '*' （默认）或字符串 | 'dba1, dba2, +admin_group' | 允许调用 set_user_u() 提权的用户名单
 | set_user.superuser_audit_tag | 字符串 | 'AUDIT' | 日志前缀标签
 | set_user.exit_on_error | `on` （默认）或者 `off` | `on` | 出现错误时是否退出当前会话

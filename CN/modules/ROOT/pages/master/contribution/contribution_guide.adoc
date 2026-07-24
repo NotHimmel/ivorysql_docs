@@ -325,7 +325,7 @@ leave a comment
 
 2、点击右上角fork按钮，等待fork完成
 
-=== 第2步:将fork的仓库克隆至本地
+=== 将fork的仓库克隆至本地
 
 ```
 cd $working_dir # 将 $working_dir 替换为你想放置 repo 的目录。例如，`cd ~/Documents/GitHub`
@@ -402,13 +402,13 @@ IvorySQL 文档中心由三部分组成：
 
 对于较大的改动或添加新页面，建议使用完整的 Git 工作流：
 
-==== 第1步：Fork 文档仓库
+==== Fork 文档仓库
 
 1、打开文档仓库 https://github.com/IvorySQL/ivorysql_docs
 
 2、点击右上角 fork 按钮，等待 fork 完成
 
-==== 第2步：将 fork 的仓库克隆至本地
+==== 将 fork 的仓库克隆至本地
 
 ```
 cd $working_dir # 将 $working_dir 替换为你想放置 repo 的目录
@@ -416,7 +416,7 @@ cd $working_dir # 将 $working_dir 替换为你想放置 repo 的目录
 git clone git@github.com:$user/ivorysql_docs.git # 将 `$user` 替换为你的 GitHub ID
 ```
 
-==== 第3步：创建一个新的 Branch
+==== 创建一个新的 Branch
 
 ```
 cd $working_dir/ivorysql_docs
@@ -424,7 +424,7 @@ cd $working_dir/ivorysql_docs
 git checkout -b new-branch-name
 ```
 
-==== 第4步：编辑文档
+==== 编辑文档
 
 在新建的 new-branch-name 中编辑文档。IvorySQL 文档使用 AsciiDoc 格式编写，请参考 xref:master/contribution/asciidoc_syntax_reference.adoc[AsciiDoc 语法参考]。
 
@@ -433,7 +433,7 @@ git checkout -b new-branch-name
 . 中英文文件应该同名
 . 修改对应的 `nav.adoc` 文件添加导航链接
 
-==== 第5步：生成 commit
+==== 生成 commit
 
 ```
 git add <file>
@@ -441,7 +441,7 @@ git add <file>
 git commit -m "commit-message"
 ```
 
-==== 第6步：将修改推送至远端
+==== 将修改推送至远端
 
 ```
 git push -u origin new-branch-name
@@ -468,7 +468,7 @@ IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然
 
 具体的选题、测试、文档编写等环节，请参考下面的详细步骤。
 
-==== 第1步：选题与沟通
+==== 选题与沟通
 
 ===== 确认组件未被适配
 
@@ -490,7 +490,7 @@ IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然
 
 在提交文档贡献之前，请确保您已签署贡献者许可协议（CLA）。详情请参阅本指南的签署 CLA。
 
-==== 第2步：适配测试
+==== 适配测试
 
 生态组件适配的目标分为两个层面：
 
@@ -565,7 +565,7 @@ Oracle 兼容模式测试不通过——尤其是执行 `CREATE EXTENSION` 就�
 
 确认目标扩展属于适用场景后，您可以向 IvorySQL 仓库提交 PR，将扩展名加入 `PgDialectExtensions` 白名单，并在 PR 描述中附上两种模式下的测试结果；同时在适配文档的 "Oracle 兼容性" 章节中说明该扩展通过白名单机制运行。
 
-==== 第3步：文档编写
+==== 文档编写
 
 IvorySQL 文档使用 AsciiDoc 编写的，其语法与 Markdown 类似但功能更加强大。如果不熟悉 AsciiDoc 语法，可参阅 xref:master/contribution/asciidoc_syntax_reference.adoc[asciidoc语法快速参考]。
 
@@ -673,7 +673,7 @@ ivorysql=# SELECT * FROM pg_available_extensions WHERE name = '<扩展名>';
 [NOTE]
 中英文版本的概述页都需要同步更新。
 
-==== 第4步：提交 PR
+==== 提交 PR
 
 ===== 创建分支
 
@@ -696,7 +696,7 @@ git checkout -b feature/adapt-<组件名称>
 按照 xref:#_提交_pr[提交 PR] 章节的步骤创建 PR，并注意以下特殊要求：
 
 . 向 https://github.com/IvorySQL/ivorysql_docs[IvorySQL docs] 仓库的 master 分支提交 PR
-. 在 PR 描述中使用 `Fixes IvorySQL/IvorySQL#<编号>` 关联第一步中认领或新建的适配 Issue
+. 在 PR 描述中使用 `Fixes IvorySQL/IvorySQL#<编号>` 关联中认领或新建的适配 Issue
 . 在 PR 描述中说明：
 * 适配的组件名称和版本
 * 测试环境信息
@@ -738,7 +738,7 @@ $PG_CONFIG --version
 . 扩展的 `.so` 文件是否正确安装到 IvorySQL 的 `lib` 目录
 . 扩展的 `.sql` 和 `.control` 文件是否正确安装到 `share/extension` 目录
 . IvorySQL 版本是否与组件要求的 PostgreSQL 版本兼容
-. 若失败原因是 PG 专用语法无法解析，可参考第三步的 PG 语法白名单机制。
+. 若失败原因是 PG 专用语法无法解析，可参考的 PG 语法白名单机制。
 
 ==== Oracle 兼容模式下功能异常
 

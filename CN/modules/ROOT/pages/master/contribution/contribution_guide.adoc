@@ -216,9 +216,9 @@ IvorySQL官网下载：https://github.com/IvorySQL/Ivory-www
 
 有时，您会看到核心团队成员直接提交到存储库，而无需执行pull请求工作流。这仅适用于小的更改，我们使用的经验法则是：如果更改涉及任何可能导致测试失败的功能，那么它必须通过pull请求工作流。另一方面，如果更改发生在代码库的非功能部分（例如在注释块中修复打字错误），则核心团队成员可以决定直接提交到存储库。
 
-== **提Issue**
+== **提交Issue**
 
-=== 第1步 进入New issue 页面：
+=== 进入New issue 页面：
 
 1、进入 IvorySql官网：https://github.com/IvorySQL/IvorySQL 
 
@@ -227,7 +227,7 @@ IvorySQL官网下载：https://github.com/IvorySQL/Ivory-www
 image::p3.png[]
 
 
-=== 第2步：选择需要填写的issue类型
+=== 选择需要填写的issue类型
 
 **1、bug report**
 
@@ -286,13 +286,40 @@ Title: 标题
 ```
 
 
-=== 第3步：提交
+=== 提交
 
 点击 submit new issue 按钮, 提交即可
 
-== **贡献代码**
+== **提交PR**
 
-=== 第1步: Fork IvorySQL 仓库
+对于提交一个PR应该保持一个功能，或者一个bug提交一次。禁止多个功能一次提交。
+
+
+=== 创建一个Pull Request
+
+1、打开你 Fork 的仓库（将 $user 替换为你的 GitHub ID）。
+
+    2、点击 Compare & pull request 按钮
+
+=== 填写PR信息
+
+```
+Fix test
+功能描述
+```
+
+```
+leave a comment
+对该提交功能进行比较详细的描述
+```
+
+=== 提交PR
+
+点击Create pull request 按钮即可提交。
+
+== **代码贡献**
+
+=== Fork IvorySQL 仓库
 
 1、打开ivorysql仓库 https://github.com/IvorySQL/IvorySQL 
 
@@ -306,7 +333,7 @@ cd $working_dir # 将 $working_dir 替换为你想放置 repo 的目录。例如
 git clone git@github.com:$user/IvorySQL.git # 将 `$user` 替换为你的 GitHub ID
 ```
 
-=== 第3步：创建一个新的Branch
+=== 创建一个新的Branch
 
 ```
 cd $working_dir/IvorySQL
@@ -314,11 +341,11 @@ cd $working_dir/IvorySQL
 git checkout -b new-branch-name
 ```
 
-=== 第4步：编辑文档或修改代码
+=== 修改代码
 
 在新建的new-branch-name中修改代码。
 
-=== 第5步：生成commit
+=== 生成commit
 
 ```
 Git add <file>
@@ -326,785 +353,104 @@ Git add <file>
 Git commit -m “commit-message”
 ```
 
-=== 第6步：将修改推送至远端
+=== 将修改推送至远端
 
 ```
 Git push -u origin new-branch-name
 ```
 
-=== 第7步：创建一个Pull Request
+完成代码推送后，请参考 xref:#_提交_pr[提交 PR] 章节创建 Pull Request。
 
-1、打开你 Fork 的仓库（将 $user 替换为你的 GitHub ID）。
+== **文档贡献**
 
-2、点击 Compare & pull request 按钮即可创建 PR。
+IvorySQL 社区提供双语文档。英文文档保存在 EN/ 目录中，中文文档保存在 CN/ 目录中。您可以为任何一方文档做出贡献，当然您也可以为两方同时做出贡献。文档贡献遵循"fork - pull request - merge"流程。
 
-== **提交PR**
+=== 文档中心结构
 
-对于提交一个PR应该保持一个功能，或者一个bug提交一次。禁止多个功能一次提交。
+IvorySQL 文档中心由三部分组成：
 
+* https://github.com/IvorySQL/ivorysql_docs[文档文件]：存放所有 AsciiDoc 格式的源文件
+* https://github.com/IvorySQL/ivorysql_web[静态网页文件]：存放生成的静态网页
+* https://github.com/IvorySQL/ivory-doc-builder[网页模板文件]：用于生成网页的模板和配置
 
-=== 第1步：创建一个Pull Request
+如果您只是想修改现有内容或添加新页面，只需要 fork 文档文件仓库即可。如果想深度参与文档中心建设（如修改网页 UI），则需要同时 fork 这三个仓库。
 
-1、打开你 Fork 的仓库（将 $user 替换为你的 GitHub ID）。
+=== 贡献方式
 
-​    2、点击 Compare & pull request 按钮
+您可以从以下任何一项开始，以帮助改进 IvorySQL 文档：
 
-=== 第2步：填写PR信息
+* 编写完善文档
+* 修复拼写错误或格式（标点符号、空格、缩进、代码块等）
+* 修正或更新不当或过时的说明
+* 添加缺少的内容（句子、段落或新文档）
+* 将文档更改从英文翻译成中文，或从中文翻译成英文
+* 提交、回复和解决文档问题
+* （高级）查看其他人创建的拉取请求
 
-```
-Fix test
-功能描述
-```
-
-```
-leave a comment
-对该提交功能进行比较详细的描述
-```
-
-=== 第3步：提交PR
-
-点击Create pull request 按钮即可提交。
-
-== **编写文档**
-
-=== 准备工作
-
-（1）下载Markdown或者Typora文档编辑器。
-
-（2）检查源仓库是否有更新，如果有更新请先更新并同步到自己的仓库。如有更新请参阅以下步骤，更新至最新版本：
-
-```
-git remote
-
-git fetch upstream
-
-git merge upstream/main
-
-git push
-```
-
-（3）熟悉样式风格（规范说明）
-
-=== 贡献地方
-
-IvorySQL社区提供双语文档。英文文档保存在IvorySQL/文档存储库（文档存储库）中，中文文档保存在 IvorySQL/文档-i18n存储库（文档-i18n 存储库）中。您可以为任何一方文档做出贡献，当然您也可以为两方同时做出贡献。
-
-​    您可以从以下任何一项开始，以帮助改进IvorySQL网站（英文和 -i18n）上的 IvorySQL文档：
-
-​        (1) 编写完善文档
-
-​        (2) 修复拼写错误或格式（标点符号、空格、缩进、代码块等）
-
-​        (3) 修正或更新不当或过时的说明
-
-​        (4) 添加缺少的内容（句子、段落或新文档）
-
-​        (5) 将文档更改从英文翻译成中文，或从中文翻译成英文。
-
-​        (6) 提交、回复和解决文档问题或文档-i18n问题
-
-​        (7) （高级）查看其他人创建的拉取请求
-
-=== 规范说明
-
-IvorySQL文档是用“markdown”编写的。为确保格式的质量和一致性，在修改更新文档时应遵循某些 Markdown 规则。
-
-​    **Markdown规范**
-
-​    1、标题从一级开始递增使用，禁止跳级使用。例如：一级标题下面不能直接使用三级标题；二级标题下面不能直接使用四级标题。
-
-​    2、标题必须统一使用 ATX 风格，即在标题前加 # 号来表示标题级别。
-
-​    3、标题的引导符号 # 后必须空一格再接标题内容。
-
-​    4、标题的引导符号“#”后只能空一格后再接标题内容，不能有多个空格。
-
-​    5、标题必须出现在一行行首，即标题的 # 号前不能有任何空格。
-
-​    6、标题末尾仅能出现中英文问号、反引号、中英文单双引号等符号。其余如冒号、逗号、句号、感叹号等符号均不能在标题末尾使用。
-
-​    7、标题上面须空一行。
-
-​    8、文档中不能连续出现内容重复的标题，如一级标题为 # IvorySQL 架构，紧接着的二级标题就不能是 ## IvorySQL 架构。如果不是连续的标题，则标题内容可重复。
-
-​    9、文档中只能出现一个一级标题。
-
-​    10、一般来说，除 TOC.md 文件可缩进 2 个空格外，其余所有 .md 文件每缩进一级，默认须缩进 4 个空格。
-
-​    11、文档中（包括代码块内）禁止出现 Tab 制表符，如需缩进，必须统一用空格代替
-
-​    12、禁止出现连续的空行。
-
-​    13、块引用符号 > 后禁止出现多个空格，只能使用一个空格，后接引用内容。
-
-​    14、使用有序列表时，必须从 1 开始，按顺序递增。
-
-​    15、使用列表时，每一列表项的标识符（+、-、* 或数字）后只能空一格，后接列表内容。
-
-​    16、列表（包括有序和无序列表）前后必须各空一行。
-
-​    17、代码块前后必须各空一行。
-
-​    18、文档中禁止出现裸露的 URL。如果希望用户能直接点击并打开该 URL，则使用一对尖括号 (<URL>) 包裹该 URL。如果由于特殊情况必须使用裸露的 URL，不需要用户通过点击打开，则使用一对反引号 (`URL`) 包裹该 URL。
-
-​    19、使用加粗、斜体等强调效果时，在强调标识符内禁止出现多余的空格。如不能出现 `** 加粗文本 **`。
-
-​    20、单个反引号包裹的代码块内禁止出现多余的空格。如不能出现 ` 示例文本 `。
-
-​    21、链接文本两边禁止出现多余的空格。如不能出现 [某链接](https://www.example.com/)。
-
-​    22、链接必须有链接路径。如不能出现[空链接]()或[空链接](#)等情况。
-
-=== 示例
-
-1、标题从一级开始递增使用，禁止跳级使用。
-
-```
-# Heading 1
-### Heading 3
-
-We skipped out a 2nd level heading in this document
-```
-
-
-
-2、标题必须统一使用 ATX 风格，即在标题前加 # 号来表示标题级别。
-
-```
-# Heading 1
-## Heading 2
-### Heading 3
-#### Heading 4
-## Another Heading 2
-### Another Heading 3
-```
-
-
-
-3、标题的引导符号 # 后必须空一格再接标题内容。禁止#后多个空格，禁止#前出现空格
-
-错误示范：
-
-```
-# Heading 1
-## Heading 2
-```
-
-正确示范：
-
-```
-# Heading 1
-## Heading 2
-```
-
-
-
-4、标题末尾仅能出现中英文问号、反引号、中英文单双引号等符号。 
-
-错误示范
-
-```
-# This is a heading.
-```
-
-正确示范
-
-```
-# This is a heading
-```
-
-
-
-5、标题上面空一行
-
-错误示范
-
-```
-# Heading 1
-Some text
-Some more text## Heading 2
-```
-
-正确示范
-
-```
-# Heading 1
-Some text
-Some more text
-
-## Heading 2
-```
-
-
-
-6、文档中不能连续出现内容重复的标题，如一级标题为 # IvorySQL  描述，紧接着的二级标题就不能是 ## IvorySQL 描述。如果不是连续的标题，则标题内容可重复。
-
-错误示范
-
-```
-# Some text
-
-## Some text
-```
-
-正确示范
-
-```
-# Some text
-
-## Some more text
-```
-
-
-
-7、文档中只能出现一个一级标题。
-
-错误示范
-
-```
-# Top level heading
-
-# Another top-level heading
-```
-
-正确示范
-
-```
-# Title
-
-## Heading
-
-## Another heading
-```
-
-
-
-8、一般来说，除 TOC.md 文件可缩进 2 个空格外，其余所有 .md 文件每缩进一级，默认须缩进 4 个空格。
-
-错误示范
-
-```
-* List item
-  * Nested list item indented by 3 spaces
-```
-
-正确示范:
-
-```
-* List item
-    * Nested list item indented by 4 spaces
-```
-
-
-
-9、文档中（包括代码块内）禁止出现 Tab 制表符，如需缩进，必须统一用空格代替
-
-错误示范：
-
-```
-Some text
-	* hard tab character used to indent the list item
-```
-
-正确示范:
-
-```
-Some text
-  * Spaces used to indent the list item instead
-```
-
-
-
-10、禁止出现连续的空行
-
-错误示范
-
-```
-Some text here
-
-
-Some more text here
-```
-
-正确示范:
-
-```
-Some text here
-
-Some more text here
-```
-
-
-
-11、块引用符号 > 后禁止出现多个空格，只能使用一个空格，后接引用内容。
-
-错误示范
-
-```
->  This is a blockquote with bad indentation>  there should only be one.
-```
-
-正确示范
-
-```
-> This is a blockquote with correct> indentation.
-```
-
-
-
-12、使用有序列表时，必须从 1 开始，按顺序递增。
-
-错误示范:
-
-```
-1. Do this.
-1. Do that.
-1. Done.
-```
-
-```
-0. Do this.
-1. Do that.
-2. Done.
-```
-
- 正确示范:
-
-```
-1. Do this.
-2. Do that.
-3. Done.
-```
-
-
-
-13、使用列表时，每一列表项的标识符（+、-、* 或数字）后只能空一格，后接列表内容。
-
-正确示范
-
-```
-* Foo
-* Bar
-* Baz
-
-1. Foo
-  * Bar
-1. Baz
-```
-
-
-
-14、列表（包括有序和无序列表）前后必须各空一行。
-
-错误示范
-
-```
-Some text* Some* List
-
-1. Some2. List
-
-Some text
-```
-
-正确示范
-
-```
-Some text
-
-* Some
-* List
-
-1. Some
-2. List
-
-Some text
-```
-
-
-
-15、代码块前后必须各空一行。
-
-错误示范
-
-```
-Some text
-​```
-Code block
-​```
-​```
-Another code block
-​```
-Some more text
-```
-
-正确示范
-
-```
-Some text
-
-​```
-Code block
-​```
-
-​```
-Another code block
-​```
-
-Some more text
-```
-
-
-
-16、文档中禁止出现裸露的 URL。如果希望用户能直接点击并打开该 URL，则使用一对尖括号 (<URL>) 包裹该 URL。如果由于特殊情况必须使用裸露的 URL，不需要用户通过点击打开，则使用一对反引号 (`URL`) 包裹该 URL。
-
-错误示范
-
-```
-For more information, see https://www.example.com/.
-```
-
-正确示范
-
-```
-For more information, see <https://www.example.com/>.
-```
-
-
-
-17、使用加粗、斜体等强调效果时，在强调标识符内禁止出现多余的空格。如不能出现 `** 加粗文本 **`。
-
-错误示范
-
-```
-Here is some ** bold ** text.
-
-Here is some * italic * text.
-
-Here is some more __ bold __ text.
-
-Here is some more _ italic _ text.
-```
-
-正确示范:
-
-```
-Here is some **bold** text.
-
-Here is some *italic* text.
-
-Here is some more __bold__ text.
-
-Here is some more _italic_ text.
-```
-
-
-
-18、单个反引号包裹的代码块内禁止出现多余的空格。如不能出现 ` 示例文本 `。
-
-错误示范：
-
-```
-some text 
- some text
-```
-
-正确示范:
-
-```
-some text
-```
-
-
-
-19、链接文本两边禁止出现多余的空格。如不能出现 [ 某链接 ](https://www.example.com/)。
-
-错误示范
-
-```
-[ a link ](https://www.example.com/)
-```
-
-正确示范:
-
-```
-[a link](https://www.example.com/)
-```
-
-
-
-20、链接必须有链接路径。如不能出现[空链接]()或[空链接](#)等情况。
+=== 方式一：通过网站快速编辑（适合小修改）
 
-错误示范
+对于简单的修改（如修复拼写错误、更新 small 内容），可以直接通过网站进行：
 
-```
-[an empty link]()
-
-[an empty fragment](#)
-```
+. 在文档页面右上角点击 `Edit this page` 按钮
+. 系统会跳转到 GitHub 上对应源文件的编辑页面
+. 按照 AsciiDoc 格式修改内容
+. 填写修改说明后提交 PR
 
-正确示范:
+这种方式无需本地环境，适合快速修正小问题。
 
-```
-[a valid link](https://example.com/)
+=== 方式二：完整 Git 工作流（适合较大改动）
 
-[a valid fragment](#fragment)
-```
+对于较大的改动或添加新页面，建议使用完整的 Git 工作流：
 
+==== 第1步：Fork 文档仓库
 
+1、打开文档仓库 https://github.com/IvorySQL/ivorysql_docs
 
-21文档中的代码块统一使用三个反引号进行包裹，禁止使用缩进四格风格的代码块。
+2、点击右上角 fork 按钮，等待 fork 完成
 
-错误示范：
+==== 第2步：将 fork 的仓库克隆至本地
 
 ```
-Some text.
+cd $working_dir # 将 $working_dir 替换为你想放置 repo 的目录
 
-  # Indented code
-
-More text.
+git clone git@github.com:$user/ivorysql_docs.git # 将 `$user` 替换为你的 GitHub ID
 ```
 
-正确示范
+==== 第3步：创建一个新的 Branch
 
 ```
-```ruby
-# Fenced code
-​```
-More text.
-```
-
-=== 环境准备
-
-为了测试您所做的修改是否修改，您需要准备以下环境
-
-* `Node.js` 安装
-* `Antora` 安装
-
-环境安装请参考 https://docs.antora.org/antora/latest/[Antora docs]。
-
-安装成功后，在终端上显示如下即为成功安装。
-
-image::14.png[]
-
-
-=== 网页生成
-
-通过阅读之前内容，相信您已经有了充足的准备，包括 `fork` 我们文档中心相关的三个仓库到个人仓库中，`Antora` 工具的安装准备等环境的搭建。
-
-* 首先，您要知道网页对应的ui的位置，如下图：
-
-image::15.png[]
-
-中英文的网页ui模板基本一致，因此修改时应该尽量保证同时修改两个模板，将修改过后的ui再上传至个人Github上，完成了这些，就可以考虑在本地生成您修改过后的网页了。
-
-文档中心是由 `Antora` 进行搭建的，在运行 `Antora` 之前，记得修改对应 `playbook.yml` 文件
-
-image::16.png[]
-image::17.png[]
-
-完成上述流程之后，请在终端运行命令 `antora antora-playbook.yml --stacktrace`，然后耐心等待，当成功运行结束后，你就可以查看自己生成的网页了。
-
-在检查之后，你就可以开始着手上传至我们的 *ivorysql_web* 仓库中，提交PR的流程和之前的流程相同，感谢您对社区的贡献^_^，我们会在审核过后，考虑是否更新网站。
+cd $working_dir/ivorysql_docs
 
-== 提交blog
-
-=== 准备工作
-
-1、下载 https://markdown.com.cn/tools.html#%E7%BC%96%E8%BE%91%E5%99%A8[Markdown]或者 https://typoraio.cn/[Typora]文档编辑器。
-
-​	2、先下载博客源码到本地，检查源仓库 https://github.com/IvorySQL/Ivory-www 是否有更新，如果有更新请先更新并同步到自己的仓库。请参阅以下步骤，更新至最新版本：
-
-``` bash
-# 拉取网站源码
-git clone https://github.com/IvorySQL/Ivory-www.git
-# 同步更新仓库
-git pull
+git checkout -b new-branch-name
 ```
-
-​	3、熟悉样式风格（规范说明）
 
-=== 贡献地方
+==== 第4步：编辑文档
 
-IvorySQL社区提供双语文档。英文博客保存在源码目录<u>**Ivory-www/blog**</u>中，中文博客保存在源码目录<u>**Ivory-www/i18n/zh-CN/docusaurus-plugin-content-blog**</u>中。您可以为任何一方博客做出贡献，当然您也可以为两方同时做出贡献。
+在新建的 new-branch-name 中编辑文档。IvorySQL 文档使用 AsciiDoc 格式编写，请参考 xref:master/contribution/asciidoc_syntax_reference.adoc[AsciiDoc 语法参考]。
 
-=== 如何贡献
+添加新页面时：
+. 将 `.adoc` 文件放入正确目录（CN/ 或 EN/ 对应版本目录）
+. 中英文文件应该同名
+. 修改对应的 `nav.adoc` 文件添加导航链接
 
-在贡献之前，让我们快速浏览一下有关IvorySQL博客维护的信息。这可以帮助您尽快成功的提交blog成为贡献者。blog提交规范
+==== 第5步：生成 commit
 
-​	（1）将代码克隆到本地仓库
-
-``` bash
-git clone https://github.com/IvorySQL/Ivory-www.git
-```
-
-​	（2）创建一个分支
-
-```bash
-git checkout -b <branch-name>
 ```
+git add <file>
 
-​	（3）在博客目录中创建自己文章的目录，目录名字规则参照规范说明。
-
-```bash
-# 生成英文博客目录及文件
-cd Ivory-www/blog
-mkdir <YEAR-MONTH-DAY-title>
-cd <YEAR-MONTH-DAY-title>
-touch index.md
-# 生成中文博客目录及文件
-cd Ivory-www/i18n/zh-CN/docusaurus-plugin-content-blog
-mkdir <YEAR-MONTH-DAY-title>
-cd <YEAR-MONTH-DAY-title>
-touch index.md
+git commit -m "commit-message"
 ```
 
-​	（4）在index.md编写要发布的博文，将博客中需要的图片放到和index.md同级目录。
+==== 第6步：将修改推送至远端
 
-​	（5）提交发布博客
-
-```bash
-git add <file-path>
-git commit -m "<message>"
-git push origin <branch-name>:<branch-name>
 ```
-
-=== 规范说明
-
-==== blog提交规范
-
-（1）文件夹命名格式：**年-月-日-名称**
-
-   		示例：2022-1-28-ivorysql-arrived
-
-​	（2）文件属性统一为**index.md**
-
-​	（3）图片属性统一为 **.png**形式，并将需要上传的图片提前放到要提交的文件夹中。
-
-​			**注意：**图片名字唯一，不可重复奥~。
-
-​			示例：po-one.png
-
-==== blog编写规范
-
-博客是用markdown或者Typora来编写，您可以阅读 https://docusaurus.io/zh-CN/docs/blog[博客 | Docusaurus]来了解博客的设计方式。
-
-（1）文章头部部署包括以下信息
-
-```vim
----
-slug: IvorySQL
-title: 欢迎来到IvorySQL社区
-authors: [official]
-authorTwitter: IvorySql
-tags: [IvorySQL, Welcome, Database, Join Us]
----
+git push -u origin new-branch-name
 ```
-
-​	**提示：**您可以将以上模板复制到您的文件夹中并进行编辑。
-
-​	**注意：**1）slug、title、authors、tags后添加文字均空一格。
-
-​     		  2）slug每篇名字唯一且不可重复，相同文章中英文版可以相同。
-
-（2）文本格式
-
-​		正文段落标题统一用**h2**/“**二级标题**”；
-
-​		正文使用默认字体字号。
-
-（3）插入照片命名形式
-
-​		[Hello](Hello-banner.png)
-
-（4）插入超链接命名形式
-
-​		[名称]（链接）
-
-​		[Github page](https://github.com/IvorySQL/) 下载源代码或发布的软件包。
-
-
-== 网站贡献指南
-
-https://docs.ivorysql.org[IvorySQL的文档中心] 采用开源工具 https://antora.org/[`Antora`] 进行搭建，同样的，我们的文档中心也是开源的。文档中心由三部分组成，分别是 https://github.com/IvorySQL/ivorysql_docs[文档文件], https://github.com/IvorySQL/ivorysql_web[静态网页文件] 以及生成网页所用到的 https://github.com/IvorySQL/ivory-doc-builder[网页模板文件] 。
-
-我们的文档中心同样欢迎每一位愿意参与到开源工作中的小伙伴的加入，记得遵守我们的行为准则^_^。
-
-=== 如何贡献
-
-由于我们的文档中心全部托管于Github上，这使得任何用户都可以将我们的文档仓库 `fork` 到个人仓库中，然后对其进行修改，之后提交PR，由我们的开源团队的人员审核过后就可以将修改更新到我们的文档中心中。
-
-为了更加便捷地使您达到纠正文档错误的目的，首先需要您按照想要更新的大小来建立个人仓库，如下：
-
-* 如果您想修改原有的内容或者添加新的页面，仅需要 `fork` https://github.com/IvorySQL/ivorysql_docs[文档文件] 到个人仓库中。
-
-image::7.png[]
-
-* 如果您想更深度地参与到文档中心的建设工作中来，除了文档文件外，还需要 `fork` https://github.com/IvorySQL/ivorysql_web[静态网页文件] 和 https://github.com/IvorySQL/ivory-doc-builder[网页模板文件] 到个人仓库中。
-
-image::8.png[]
-image::9.png[]
-
-=== 修改内容
-
-本小节将会介绍发现网页内容不适宜之后，对网页内容进行修改的流程。
-
-* 在有错误内容的网页的右上角，有一个 `edit this page` 的按钮，点击按钮。如图：
-
-image::10.png[]
-
-* 点击之后，就会跳转到我们存放当前页面源 `.adoc` 文件的编辑页面，请按照 `Asciidoc` 格式对内容进行修改。如图：
-
-image::11.png[]
-
-* 编辑完成后，如图：
-
-image::12.png[]
-
-* 确认更新后，如图：
-
-image::13.png[]
-
-* 接下来会由开源团队的相关人员负责审核您提交的内容，审核完成后您所提交的更新就会出现在对应页面上。
-
-=== 添加页面
-
-本小节会介绍如何在网站上添加新的页面组件，添加新页面涉及的修改主要包括以下几种：
-
-* `CN/modules/ROOT/pages/vX.X` 目录下的 `.adoc` 文件添加
-* `CN/modules/ROOT/nav.adoc` 的修改，如果修改涉及到图片的修改或者添加，请修改 `images` 中的图片
-* `EN/modules/ROOT/pages/vX.X` 目录下的 `.adoc` 文件添加
-* `EN/modules/ROOT/nav.adoc` 的修改，如果修改涉及到图片的修改或者添加，请修改 `images` 中的图片
-
-1. 首先，您需要把您 `fork` 的仓库，clone到本地
-
-    git clone https://github.com/$username$/ivorysql_docs.git
-
-2. 然后，将要添加的 `.adoc` 文件放至正确目录下，切记中英文的都应该准备（*中英文文件应该同名*），并且各自放至正确目录下，同时，修改对应的 `nav.adoc` 文件（修改方式可以参照文件已有内容进行修改）。
-3. 上述修改完成后，先提交至个人仓库
-
-    git add .
-    git commit -m "$describe your change$"
-    git push
-
-4. 之后按照如下提交PR即可
-
-image::13.png[]
-
-=== 测试
-
-如果您不满足于简单的在网页端进行提交或者仅修改网页内容，又或者您想要修改网页ui，本小节内容将会帮助到您。
-
-在阅读本小节内容之前，您需要确认您的Github个人仓库是否已经 `fork` 了网页模板文件仓库和静态网页文件仓库，如果没有请参考如何贡献。
-
-=== 部署网页
-
-部署网页这部分工作，暂时还是由开源团队的人员负责，我们重视每一次提交和每一个issue，所以请不要担心自己对于社区的贡献被埋没^_^
-
-=== Tip
 
-本章节主要介绍了如何自己主动去更新我们的文档中心，但是我们明确地知道山高路远，时不我待。因此对于没有太多时间的小伙伴来说，可以发邮件到我们的 **ivorysql-docs@ivorysql.org**，我们会有专门的工作人员进行处理您的每一封来信，期待您的邮件。
+完成文档推送后，请参考 xref:#_提交_pr[提交 PR] 章节创建 Pull Request。
 
-== 生态组件适配
+提交 PR 后，系统会自动在 PR 页面生成预览地址。贡献者可以点击预览链接查看修改后的文档效果，确认修改是否符合预期。维护团队会对 PR 进行评审，如有修改建议会在 PR 中留言，贡献者根据反馈进行修改。评审通过后，维护团队会 merge PR，文档贡献即完成。
+== **组件贡献**
 
 IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然继承了 PostgreSQL 丰富的扩展生态。为了让更多的 PostgreSQL 生态组件能够在 IvorySQL 上稳定运行，IvorySQL 社区欢迎外部贡献者参与生态组件的适配工作。
 
@@ -1122,7 +468,7 @@ IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然
 
 具体的选题、测试、文档编写等环节，请参考下面的详细步骤。
 
-==== 第一步：选题与沟通
+==== 第1步：选题与沟通
 
 ===== 确认组件未被适配
 
@@ -1133,7 +479,7 @@ IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然
 在 IvorySQL 仓库的 https://github.com/IvorySQL/IvorySQL/issues[Issue 列表] 中搜索目标组件：
 
 - 如果相关适配 Issue 已存在，先确认其尚未被分配（Assignees 为空），然后点击右上角 Assignees 区域的 `Assign yourself`，将该 Issue 认领给自己；若已被他人认领，请重新选择组件；
-- 如果相关 Issue 尚不存在，则新建一个 `Feature Request` 类型的 Issue，添加 `compatibility` 标签，并分配给自己。新建 Issue 的格式可参考已有的生态组件适配类 Issue：标题格式为 `Ecosystem Integration: <组件名>`，正文用一句话说明要适配的组件及其用途。
+- 如果相关 Issue 尚不存在，则新建一个 `Feature Request` 类型的 Issue，添加 `extension` 标签，并分配给自己。新建 Issue 的格式可参考已有的生态组件适配类 Issue：标题格式为 `Ecosystem Integration: <组件名>`，正文用一句话说明要适配的组件及其用途。
 
 维护者会评估该组件是否适合纳入 IvorySQL 生态，并在 Issue 中与您沟通确认。
 
@@ -1144,28 +490,7 @@ IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然
 
 在提交文档贡献之前，请确保您已签署贡献者许可协议（CLA）。详情请参阅本指南的签署 CLA。
 
-==== 第二步：环境准备
-
-===== IvorySQL 环境
-
-请准备一套可用于测试的 IvorySQL 环境，建议满足以下要求：
-
-* IvorySQL 版本：5.0 及以上
-* 操作系统：建议使用 Ubuntu 24.04 (x86_64) 或其他主流 Linux 发行版
-* 安装路径：记录 IvorySQL 的安装路径，后续编译扩展时需要用到 `pg_config` 的路径
-
-[TIP]
-可以通过 IvorySQL 官方提供的 Docker 镜像快速搭建测试环境，参考 xref:master/containerization/docker_podman_deployment.adoc[Docker & Podman 部署]。
-
-===== 编译工具链
-
-根据目标组件的编译方式，准备相应的工具链：
-
-* C/C++ 扩展：需要 gcc、make 等基础编译工具
-* Rust 扩展：需要 cargo、rustc 等 Rust 工具链
-* 其他语言扩展：需要对应语言的运行环境
-
-==== 第三步：适配测试
+==== 第2步：适配测试
 
 生态组件适配的目标分为两个层面：
 
@@ -1240,7 +565,7 @@ Oracle 兼容模式测试不通过——尤其是执行 `CREATE EXTENSION` 就�
 
 确认目标扩展属于适用场景后，您可以向 IvorySQL 仓库提交 PR，将扩展名加入 `PgDialectExtensions` 白名单，并在 PR 描述中附上两种模式下的测试结果；同时在适配文档的 "Oracle 兼容性" 章节中说明该扩展通过白名单机制运行。
 
-==== 第四步：文档编写
+==== 第3步：文档编写
 
 IvorySQL 文档使用 AsciiDoc 编写的，其语法与 Markdown 类似但功能更加强大。如果不熟悉 AsciiDoc 语法，可参阅 xref:master/contribution/asciidoc_syntax_reference.adoc[asciidoc语法快速参考]。
 
@@ -1348,7 +673,7 @@ ivorysql=# SELECT * FROM pg_available_extensions WHERE name = '<扩展名>';
 [NOTE]
 中英文版本的概述页都需要同步更新。
 
-==== 第五步：提交 PR
+==== 第4步：提交 PR
 
 ===== 创建分支
 
@@ -1367,6 +692,8 @@ git checkout -b feature/adapt-<组件名称>
 . 更新 CN 和 EN 的 `nav.adoc` 和 `ecosystem_overview.adoc` 里的链接
 
 ===== 创建 PR
+
+按照 xref:#_提交_pr[提交 PR] 章节的步骤创建 PR，并注意以下特殊要求：
 
 . 向 https://github.com/IvorySQL/ivorysql_docs[IvorySQL docs] 仓库的 master 分支提交 PR
 . 在 PR 描述中使用 `Fixes IvorySQL/IvorySQL#<编号>` 关联第一步中认领或新建的适配 Issue

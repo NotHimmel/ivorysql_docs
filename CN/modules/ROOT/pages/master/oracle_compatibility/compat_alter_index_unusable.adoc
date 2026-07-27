@@ -1,0 +1,275 @@
+:sectnums:
+:sectnumlevels: 5
+
+= ALTER INDEX ... UNUSABLE
+
+== 目的
+
+本文档解释 IvorySQL 中 `ALTER INDEX ... UNUSABLE` 的用途，实现 Oracle 风格的索引手动禁用功能。
+
+`UNUSABLE` 是 Oracle 数据库 `ALTER INDEX` 语句的一个子句，用于将索引标记为不可用：索引对象仍保留在数据字典中，但停止参与查询优化和 DML 维护。典型用途是在批量数据装载前禁用索引维护以提升写入性能，装载完成后通过 `ALTER INDEX ... REBUILD` 统一重建。
+
+== 功能说明
+
+=== 基本语法
+
+在 Oracle 兼容模式（`compatible_db = ORA_PARSER`）下，`ALTER INDEX` 支持以下扩展语法：
+
+[source,sql]
+----
+ALTER INDEX index_name UNUSABLE;
+----
+
+真实 Oracle **没有 `ALTER INDEX ... USABLE` 子句**——恢复可用状态唯一记录在案的方式是 `ALTER INDEX ... REBUILD`（IvorySQL 已支持，见另文）。IvorySQL 与此保持一致，不提供 `USABLE` 子句。
+
+=== 核心特性
+
+- **规划器排除**：标记为 UNUSABLE 的索引不再被规划器选为访问路径，即使显式 `SET enable_seqscan = off` 也不例外——它会被彻底排除，而不是仅仅被降权
+- **DML 停止维护**：INSERT/UPDATE 不再更新该索引的物理结构
+- **唯一性检查随之停止**：若该索引是唯一索引或主键索引，由于唯一性检查发生在索引自身的插入路径中，维护停止后重复值可以被静默插入（与 Oracle 行为一致）
+- **索引定义与数据不删除**：索引对象、其定义、已有的物理页面均保留，只是不再被读写
+- **仅 REBUILD 可恢复**：`ALTER INDEX ... REBUILD`（非 `ONLINE`）或普通 `REINDEX INDEX` 会重新物理构建索引并自动清除 UNUSABLE 标记，恢复索引的规划器可见性和 DML 维护
+- **不支持分区索引**：对 `RELKIND_PARTITIONED_INDEX` 执行 `UNUSABLE` 会报错，需要对各叶子分区索引分别操作
+
+== 语法示例
+
+=== 基本用法
+
+[source,sql]
+----
+CREATE TABLE emp (id int PRIMARY KEY, email text);
+CREATE UNIQUE INDEX idx_emp_email ON emp(email);
+
+ALTER INDEX idx_emp_email UNUSABLE;
+-- 之后：查询不再使用该索引；INSERT 重复 email 也不会报错
+----
+
+=== 批量装载工作流
+
+[source,sql]
+----
+-- 装载前禁用索引维护
+ALTER INDEX idx_emp_email UNUSABLE;
+
+-- 批量装载数据（跳过索引维护开销）
+INSERT INTO emp SELECT * FROM staging_emp;
+
+-- 装载完成后重建索引，恢复可用
+ALTER INDEX idx_emp_email REBUILD;
+----
+
+=== 规划器排除效果
+
+[source,sql]
+----
+SET enable_seqscan = off;
+EXPLAIN (COSTS OFF) SELECT * FROM emp WHERE email = 'a@example.com';
+--                      QUERY PLAN
+-- ------------------------------------------------------
+--  Index Only Scan using idx_emp_email on emp
+--    Index Cond: (email = 'a@example.com'::text)
+
+ALTER INDEX idx_emp_email UNUSABLE;
+
+EXPLAIN (COSTS OFF) SELECT * FROM emp WHERE email = 'a@example.com';
+--            QUERY PLAN
+-- ----------------------------------
+--  Seq Scan on emp
+--    Disabled: true
+--    Filter: (email = 'a@example.com'::text)
+-- 即使 Seq Scan 已被 enable_seqscan=off 禁用，规划器也没有其它可选路径
+RESET enable_seqscan;
+----
+
+=== 唯一性检查停止
+
+[source,sql]
+----
+ALTER INDEX idx_emp_email UNUSABLE;
+INSERT INTO emp VALUES (999, 'a@example.com');  -- 与已有行重复
+-- 成功，无 ERROR（维护已停止，未检测到冲突）
+----
+
+=== REBUILD 恢复可用
+
+[source,sql]
+----
+-- 如果 UNUSABLE 期间产生了违反唯一性的数据，REBUILD 会失败
+ALTER INDEX idx_emp_email REBUILD;
+-- ERROR: could not create unique index "idx_emp_email"
+-- DETAIL: Key (email)=(a@example.com) is duplicated.
+
+-- 清理重复数据后重建成功
+DELETE FROM emp WHERE id = 999;
+ALTER INDEX idx_emp_email REBUILD;
+-- 之后：索引重新可用，唯一性重新生效
+----
+
+=== 普通 REINDEX 同样可以恢复
+
+[source,sql]
+----
+ALTER INDEX idx_emp_email UNUSABLE;
+REINDEX INDEX idx_emp_email;
+-- 无需使用 Oracle 专用语法，普通 REINDEX 也会清除 UNUSABLE 标记
+----
+
+=== CLUSTER / REPLICA IDENTITY 拒绝使用 unusable 索引
+
+一个已停止维护的索引可能缺失禁用期间发生变更的行，因此不能再被信任用作聚簇排序依据或复制身份识别索引：
+
+[source,sql]
+----
+ALTER TABLE emp CLUSTER ON idx_emp_email;
+ALTER INDEX idx_emp_email UNUSABLE;
+
+CLUSTER emp;
+-- ERROR: cannot cluster on unusable index "idx_emp_email"
+
+ALTER INDEX idx_emp_email REBUILD;
+CLUSTER emp;  -- 恢复后重新可用
+----
+
+同理，若某索引被 `ALTER TABLE ... REPLICA IDENTITY USING INDEX` 指定为复制身份索引，标记为 UNUSABLE 期间逻辑复制会跳过该索引（旧行镖像不再包含旧的主键/唯一键值，而不是给出陈旧或错误的值），REBUILD 后自动恢复正常。
+
+== 错误处理
+
+=== 只有父分区索引本身不支持——叶子分区索引照常可用
+
+[source,sql]
+----
+CREATE TABLE sales (id int, region text) PARTITION BY RANGE (id);
+CREATE TABLE sales_p1 PARTITION OF sales FOR VALUES FROM (1) TO (1001);
+CREATE INDEX idx_sales_id ON sales(id);  -- 自动在 sales_p1 上创建并 attach 叶子索引
+
+-- 对父索引本身操作会报错：
+ALTER INDEX idx_sales_id UNUSABLE;
+-- ERROR: ALTER INDEX ... UNUSABLE is not supported for partitioned indexes
+-- HINT: Mark each partition's leaf index unusable individually.
+
+-- 但对叶子索引单独操作是设计上支持的，正常生效：
+ALTER INDEX sales_p1_id_idx UNUSABLE;
+ALTER INDEX sales_p1_id_idx REBUILD;
+----
+
+NOTE: 只有 `relkind = RELKIND_PARTITIONED_INDEX` 的根/父索引会被拒绝；每个分区自己的叶子物理索引（`relkind = RELKIND_INDEX`）完全不受此限制，按分区逐个禁用/重建正是官方错误提示推荐的用法。
+
+=== 索引不存在
+
+[source,sql]
+----
+ALTER INDEX no_such_index UNUSABLE;
+-- ERROR: relation "no_such_index" does not exist
+----
+
+=== 目标不是索引
+
+[source,sql]
+----
+ALTER INDEX emp UNUSABLE;  -- emp 是表名而非索引名
+-- ERROR: "emp" is not an index
+----
+
+=== 在 PG_PARSER 模式下使用
+
+[source,sql]
+----
+SET compatible_db = PG_PARSER;
+ALTER INDEX idx_emp_email UNUSABLE;
+-- ERROR: syntax error at or near "UNUSABLE"
+----
+
+=== CLUSTER 拒绝使用 unusable 聚簇索引
+
+[source,sql]
+----
+ALTER TABLE emp CLUSTER ON idx_emp_email;
+ALTER INDEX idx_emp_email UNUSABLE;
+CLUSTER emp;
+-- ERROR: cannot cluster on unusable index "idx_emp_email"
+----
+
+=== TOAST 表索引不允许 UNUSABLE
+
+一个表的 TOAST 索引用于查找超长字段的存储位置；禁用它会导致新插入的大字段值查不到，且没有任何提示。因此直接禁止：
+
+[source,sql]
+----
+ALTER INDEX pg_toast.pg_toast_16537_index UNUSABLE;
+-- ERROR: ALTER INDEX ... UNUSABLE is not supported for TOAST table indexes
+----
+
+=== ON CONFLICT 遇到 unusable 唯一索引时报错，而不是内部崩溃
+
+[source,sql]
+----
+CREATE TABLE t (id int UNIQUE, val text);
+INSERT INTO t VALUES (1, 'a');
+ALTER INDEX t_id_key UNUSABLE;
+
+INSERT INTO t VALUES (1, 'b') ON CONFLICT (id) DO UPDATE SET val = excluded.val;
+-- ERROR: there is no unique or exclusion constraint matching the ON CONFLICT specification
+
+ALTER INDEX t_id_key REBUILD;
+INSERT INTO t VALUES (1, 'c') ON CONFLICT (id) DO UPDATE SET val = excluded.val;
+-- 恢复正常
+----
+
+=== 新建外键不能绑定到 unusable 的引用键
+
+[source,sql]
+----
+CREATE TABLE parent (id int PRIMARY KEY, val text);
+ALTER INDEX parent_pkey UNUSABLE;
+
+CREATE TABLE child (id int REFERENCES parent);
+-- ERROR: cannot use an unusable primary key for referenced table "parent"
+
+ALTER INDEX parent_pkey REBUILD;
+CREATE TABLE child (id int REFERENCES parent);  -- 恢复正常
+----
+
+显式指定引用列（走命名唯一约束匹配而非主键查找）同样会被拒绝：
+
+[source,sql]
+----
+CREATE TABLE parent2 (id int, email text UNIQUE);
+ALTER INDEX parent2_email_key UNUSABLE;
+
+CREATE TABLE child2 (email text REFERENCES parent2(email));
+-- ERROR: there is no unique constraint matching given keys for referenced table "parent2"
+----
+
+=== USING INDEX 建约束拒绝 unusable 索引
+
+[source,sql]
+----
+CREATE TABLE t2 (id int, val text);
+CREATE UNIQUE INDEX idx_t2_val ON t2(val);
+ALTER INDEX idx_t2_val UNUSABLE;
+
+ALTER TABLE t2 ADD CONSTRAINT uq_val UNIQUE USING INDEX idx_t2_val;
+-- ERROR: index "idx_t2_val" is unusable
+----
+
+=== amcheck 拒绝检查 unusable 索引（避免假阳性报告）
+
+[source,sql]
+----
+CREATE TABLE t3 (id int PRIMARY KEY, val text);
+ALTER INDEX t3_pkey UNUSABLE;
+
+SELECT bt_index_check('t3_pkey');
+-- ERROR: cannot check index "t3_pkey"
+-- DETAIL: Index is unusable.
+----
+
+== 清理
+
+[source,sql]
+----
+-- 恢复索引可用状态：
+ALTER INDEX idx_emp_email REBUILD;
+-- 或者：
+REINDEX INDEX idx_emp_email;
+----

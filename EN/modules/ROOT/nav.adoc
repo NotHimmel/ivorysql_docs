@@ -30,6 +30,7 @@
 ** xref:master/oracle_compatibility/with_function_procedure_en.adoc[21、WITH FUNCTION/PROCEDURE]
 ** xref:master/oracle_compatibility/compat_create_index_online.adoc[22、ONLINE Parameter for CREATE INDEX]
 ** xref:master/oracle_compatibility/compat_stragg.adoc[23、STRAGG function]
+** xref:master/oracle_compatibility/compat_alter_index_unusable_en.adoc[24、Alter Index Unusable]
 * Containerization and Cloud Service
 ** Containerization
 *** xref:master/containerization/k8s_deployment.adoc[K8S deployment]
@@ -107,6 +108,7 @@
 *** xref:master/compatibility_features_design/read_only_view.adoc[Read Only View]
 *** xref:master/compatibility_features_design/with_function_procedure_impl_en.adoc[WITH FUNCTION/PROCEDURE]
 *** xref:master/compatibility_features_design/create_index_online.adoc[ONLINE Parameter for CREATE INDEX]
+*** xref:master/compatibility_features_design/alter_index_unusable_impl_en.adoc[Alter Index Unusable]
 ** Built-in Functions
 *** xref:master/oracle_builtin_functions/sys_context.adoc[sys_context]
 *** xref:master/oracle_builtin_functions/userenv.adoc[userenv]

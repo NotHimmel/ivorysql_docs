@@ -1,0 +1,355 @@
+:sectnums:
+:sectnumlevels: 5
+
+= ALTER INDEX ... UNUSABLE Implementation Notes
+
+== Purpose
+
+This document explains in detail how the `ALTER INDEX ... UNUSABLE` feature in IvorySQL is implemented. This feature allows manually disabling an index in Oracle compatibility mode so that it is no longer chosen by the planner and no longer maintained by DML, implementing the `UNUSABLE` clause of the Oracle database `ALTER INDEX` statement.
+
+== Implementation Notes
+
+=== System Layering
+
+The implementation of `ALTER INDEX ... UNUSABLE` is divided into five layers:
+
+```
+┌───────────────────────────────────┐
+│  Layer 1: Oracle Parser  (ora_gram.y + ora_kwlist.h)                 │
+│  ─ Adds the UNUSABLE keyword (UNRESERVED_KEYWORD, BARE_LABEL)        │
+│  ─ ALTER INDEX qualified_name UNUSABLE → OraAlterIndexUnusableStmt   │
+└───────────────────────────────────┘
+
+┌───────────────────────────────────┐
+│  Layer 2: Statement Dispatch  (tcop/utility.c)                       │
+│  ─ T_OraAlterIndexUnusableStmt appears alongside the existing        │
+│    T_OraAlterIndexRebuildStmt in 4 places: read-only transaction     │
+│    classification / ProcessUtilitySlow / CreateCommandTag /          │
+│    GetCommandLogLevel                                                │
+└───────────────────────────────────┘
+
+┌───────────────────────────────────┐
+│  Layer 3: Execution Layer  (commands/indexcmds.c)                    │
+│  ─ ExecOraAlterIndexUnusable(): permission check, resolves and       │
+│    locks the target index, rejects partitioned indexes, calls        │
+│    index_set_unusable(indexOid, true)                                │
+└───────────────────────────────────┘
+
+┌───────────────────────────────────┐
+│  Layer 4: Catalog Layer  (catalog/index.c + include/catalog/pg_index.h) │
+│  ─ Adds the pg_index.indisunusable column                            │
+│  ─ index_set_unusable(): a standalone catalog update function        │
+│    structurally mirroring index_set_state_flags()                    │
+│  ─ index_create()'s values[] array is extended with an initial       │
+│    value (false) for this column                                     │
+│  ─ reindex_index() clears this flag as part of its existing          │
+│    "repair index state" branch                                       │
+└───────────────────────────────────┘
+
+┌───────────────────────────────────┐
+│  Layer 5: Planner / Executor  (plancat.c + BuildIndexInfo)           │
+│  ─ get_relation_info() skips indexes with indisunusable set          │
+│  ─ BuildIndexInfo() makes ii_ReadyForInserts reflect this flag as    │
+│    well, so the existing skip logic in execIndexing.c naturally      │
+│    covers it — no changes to the executor itself are needed          │
+└───────────────────────────────────┘
+```
+
+=== Grammar and Parsing
+
+==== Keyword Registration
+
+`src/include/oracle_parser/ora_kwlist.h`:
+
+[source,c]
+----
+PG_KEYWORD("until", UNTIL, UNRESERVED_KEYWORD, BARE_LABEL)
+PG_KEYWORD("unusable", UNUSABLE, UNRESERVED_KEYWORD, BARE_LABEL)
+PG_KEYWORD("update", UPDATE, UNRESERVED_KEYWORD, BARE_LABEL)
+----
+
+`UNUSABLE` is an unreserved keyword, inserted alphabetically alongside `REBUILD`/`ONLINE`/`TABLESPACE`/`PARALLEL`. It is added to the `%token` list as well as to both the `unreserved_keyword` and `bare_label_keyword` productions, allowing it to be used as a bare identifier/column label.
+
+==== Grammar Rule Extension
+
+In `src/backend/oracle_parser/ora_gram.y`, immediately next to the existing `REBUILD` rule, the following is added:
+
+[source,yacc]
+----
+| ALTER INDEX qualified_name REBUILD rebuild_index_opt_list
+        {
+            OraAlterIndexRebuildStmt *n = makeNode(OraAlterIndexRebuildStmt);
+            n->relation = $3;
+            n->options = $5;
+            $$ = (Node *) n;
+        }
+| ALTER INDEX qualified_name UNUSABLE
+        {
+            OraAlterIndexUnusableStmt *n = makeNode(OraAlterIndexUnusableStmt);
+            n->relation = $3;
+            $$ = (Node *) n;
+        }
+----
+
+Unlike REBUILD, `UNUSABLE` does not take an options list — Oracle's `UNUSABLE` clause itself accepts no parameters.
+
+=== AST Node Design
+
+Added to `src/include/nodes/parsenodes.h`:
+
+[source,c]
+----
+/*
+ * Oracle-compatible ALTER INDEX ... UNUSABLE Statement
+ *
+ * Marks an index unusable: skipped by the planner and no longer
+ * maintained by DML, until restored by a REBUILD (or a plain REINDEX).
+ */
+typedef struct OraAlterIndexUnusableStmt
+{
+    NodeTag     type;
+    RangeVar   *relation;      /* index to mark unusable */
+} OraAlterIndexUnusableStmt;
+----
+
+The copy/equal/out/read functions are auto-generated from this struct by `gen_node_support.pl` and require no manual maintenance (the same treatment as the existing `OraAlterIndexRebuildStmt`).
+
+=== Catalog Layer Design
+
+==== Why Add a New `pg_index` Column, Rather Than a reloption or Reusing `indisvalid`/`indisready`
+
+- **A reloption approach is not viable**: PostgreSQL's index reloptions are declared per access method (btree/gin/hash each maintain their own private option table); there is no generic "index-level" reloption kind. Bypassing AM validation and writing directly to `pg_class.reloptions` would cause `pg_dump` restores to fail on an undeclared key.
+- **`indisvalid`/`indisready` cannot be reused**: both are tightly coupled to the multi-phase state machine of `CREATE/DROP INDEX CONCURRENTLY` (`index_set_state_flags()` has strict `Assert`s on state transitions); overloading their semantics would break the invariants of concurrent index builds.
+
+The final approach: add an independent `bool indisunusable` column, in `src/include/catalog/pg_index.h`:
+
+[source,c]
+----
+bool        indislive;         /* is this index alive at all? */
+bool        indisreplident;    /* is this index the identity for replication? */
+bool        indisunusable;     /* manually disabled via ALTER INDEX ...
+                                 * UNUSABLE (Oracle compat); skipped by the
+                                 * planner and unmaintained by DML until
+                                 * REBUILD */
+----
+
+The corresponding catalog version number in `catversion.h` is bumped. IvorySQL already has precedent for extending core catalogs directly (`pg_class.relhasrowid` for the ROWID feature, `pg_attribute.attisinvisible` for the invisible-column feature); this change follows the same pattern.
+
+`indisunusable` is a transient index *state* rather than a defining property, in the same category as `indisvalid`/`indisready`; `pg_dump` never exports state columns of this kind, so there is no need for extra `pg_dump` support code the way `attisinvisible` required.
+
+==== `index_set_unusable()`: A Standalone State-Change Function
+
+`src/backend/catalog/index.c`, right next to the existing `index_set_state_flags()`:
+
+[source,c]
+----
+/*
+ * index_set_unusable - set or clear pg_index.indisunusable
+ *
+ * Oracle-compatible companion to index_set_state_flags(): flips the
+ * "manually disabled via ALTER INDEX ... UNUSABLE" bit.  Unlike the
+ * indisvalid/indisready/indislive trio, this flag is not part of the
+ * CREATE/DROP INDEX CONCURRENTLY state machine, so no transition
+ * invariants need to be asserted here.
+ */
+void
+index_set_unusable(Oid indexId, bool unusable)
+{
+    Relation    pg_index;
+    HeapTuple   indexTuple;
+    Form_pg_index indexForm;
+
+    pg_index = table_open(IndexRelationId, RowExclusiveLock);
+
+    indexTuple = SearchSysCacheCopy1(INDEXRELID, ObjectIdGetDatum(indexId));
+    if (!HeapTupleIsValid(indexTuple))
+        elog(ERROR, "cache lookup failed for index %u", indexId);
+    indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+
+    if (indexForm->indisunusable != unusable)
+    {
+        indexForm->indisunusable = unusable;
+        CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
+    }
+
+    table_close(pg_index, RowExclusiveLock);
+}
+----
+
+`CatalogTupleUpdate()` handles cache invalidation on its own, so there is no need to call `CacheInvalidateRelcache` manually.
+
+=== Execution Layer Design
+
+==== `ExecOraAlterIndexUnusable()`
+
+`src/backend/commands/indexcmds.c`, right next to the existing `ExecOraAlterIndexRebuild()`:
+
+[source,c]
+----
+void
+ExecOraAlterIndexUnusable(ParseState *pstate, const OraAlterIndexUnusableStmt *stmt)
+{
+    ReindexParams params = {0};
+    struct ReindexIndexCallbackState cbstate;
+    Oid         indexOid;
+    char        relkind;
+
+    if (ORA_PARSER != compatible_db)
+        ereport(ERROR,
+                (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                 errmsg("ALTER INDEX ... UNUSABLE is only available when compatible_db is oracle")));
+
+    /*
+     * Reuse the same parsing/locking approach as the non-CONCURRENTLY
+     * path of ExecOraAlterIndexRebuild(): AccessExclusiveLock on the
+     * index itself, ShareLock on the heap table (decided by the shared
+     * callback), with the permission check also handled by that
+     * callback.
+     */
+    cbstate.params = params;
+    cbstate.locked_table_oid = InvalidOid;
+
+    indexOid = RangeVarGetRelidExtended(stmt->relation,
+                                        AccessExclusiveLock,
+                                        0,
+                                        RangeVarCallbackForReindexIndex,
+                                        &cbstate);
+
+    relkind = get_rel_relkind(indexOid);
+    if (relkind == RELKIND_PARTITIONED_INDEX)
+        ereport(ERROR,
+                (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                 errmsg("ALTER INDEX ... UNUSABLE is not supported for partitioned indexes"),
+                 errhint("Mark each partition's leaf index unusable individually.")));
+
+    index_set_unusable(indexOid, true);
+}
+----
+
+`RangeVarCallbackForReindexIndex` is the shared callback already used by the existing REINDEX/REBUILD infrastructure; reusing it directly means the permission check (`pg_class_aclcheck(..., ACL_MAINTAIN)`), relkind validation, and heap-table lock ordering are all fully consistent with REBUILD/REINDEX, with no need to reimplement any of it.
+
+==== Planner: Skipping Unusable Indexes
+
+`src/backend/optimizer/util/plancat.c`, `get_relation_info()`:
+
+[source,c]
+----
+if (!index->indisvalid)
+{
+    index_close(indexRelation, NoLock);
+    continue;
+}
+
+/*
+ * Ignore indexes manually disabled via the Oracle-compatible
+ * ALTER INDEX ... UNUSABLE.  This check is unconditional (not
+ * gated on the current session's compatible_db): indisunusable
+ * is a catalog fact about the index, not a per-session parser
+ * choice, and every session must honor it consistently to avoid
+ * planning against a stale/unmaintained index.
+ */
+if (index->indisunusable)
+{
+    index_close(indexRelation, NoLock);
+    continue;
+}
+----
+
+==== Executor: Skipping Maintenance of Unusable Indexes
+
+`src/backend/catalog/index.c`, `BuildIndexInfo()`:
+
+[source,c]
+----
+ii = makeIndexInfo(indexStruct->indnatts,
+                   indexStruct->indnkeyatts,
+                   index->rd_rel->relam,
+                   RelationGetIndexExpressions(index),
+                   RelationGetIndexPredicate(index),
+                   indexStruct->indisunique,
+                   indexStruct->indnullsnotdistinct,
+                   /*
+                    * A manually UNUSABLE index (Oracle compat) is treated
+                    * as not ready for inserts, so DML stops maintaining
+                    * it, same as an in-progress CREATE INDEX CONCURRENTLY.
+                    */
+                   indexStruct->indisready && !indexStruct->indisunusable,
+                   false,
+                   index->rd_indam->amsummarizing,
+                   indexStruct->indisexclusion && indexStruct->indisunique);
+----
+
+Once `ii_ReadyForInserts` is false, the existing `if (!indexInfo->ii_ReadyForInserts) continue;` logic in `execIndexing.c` naturally skips insert/update maintenance for that index — **no changes to the executor itself are required**. This is also why uniqueness checking automatically stops once a unique/primary key index becomes UNUSABLE: the check happens inside the index's own `aminsert` path and requires no additional coordination with `pg_constraint`.
+
+==== REBUILD / REINDEX Cleanup: Clearing the UNUSABLE Flag
+
+`src/backend/catalog/index.c`, in the existing "index state needs repair" branch of `reindex_index()`:
+
+[source,c]
+----
+index_bad = (!indexForm->indisvalid ||
+             !indexForm->indisready ||
+             !indexForm->indislive ||
+             indexForm->indisunusable);
+if (index_bad ||
+    (indexForm->indcheckxmin && !indexInfo->ii_BrokenHotChain))
+{
+    ...
+    indexForm->indisvalid = true;
+    indexForm->indisready = true;
+    indexForm->indislive = true;
+    /* a completed non-concurrent rebuild always clears UNUSABLE */
+    indexForm->indisunusable = false;
+    CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
+}
+----
+
+This branch covers: a plain `REINDEX INDEX`, `ALTER INDEX ... REBUILD` (non-`ONLINE`), and `REBUILD PARTITION` (non-`ONLINE`). `REBUILD ONLINE` (the concurrent path, which goes through `ReindexRelationConcurrently()` and never calls `reindex_index()`) **does not** clear the flag — see "Known Limitations".
+
+=== Isolation Strategy from PG_PARSER
+
+Following the project's convention (`if (ORA_PARSER == compatible_db) { ... }`), this feature is isolated at two levels:
+
+1. **Natural isolation at the grammar level**: the `UNUSABLE` syntax exists only in `ora_gram.y`; `PG_PARSER` sessions have no grammar entry point for it at all.
+2. **Defense in depth at the command entry point**: `ExecOraAlterIndexUnusable()` additionally guards with `if (ORA_PARSER != compatible_db) ereport(ERROR, ...)` as a backstop.
+
+=== Error Handling
+
+==== Partitioned Index Rejection
+
+[source,sql]
+----
+ALTER INDEX idx_sales_id UNUSABLE;  -- idx_sales_id is a partitioned parent index
+-- ERROR: ALTER INDEX ... UNUSABLE is not supported for partitioned indexes
+-- HINT: Mark each partition's leaf index unusable individually.
+----
+The error is raised proactively by the `relkind == RELKIND_PARTITIONED_INDEX` branch in `ExecOraAlterIndexUnusable()`.
+
+==== Rejection Under PG_PARSER Mode
+
+[source,sql]
+----
+SET compatible_db = PG_PARSER;
+ALTER INDEX idx_emp_email UNUSABLE;
+-- ERROR: syntax error at or near "UNUSABLE"
+----
+At the grammar level, this production simply does not exist under `PG_PARSER`, so the error is raised without any runtime check.
+
+==== Rebuild Failure After Maintenance Was Skipped (Uniqueness Conflict)
+
+[source,sql]
+----
+ALTER INDEX idx_emp_email UNUSABLE;
+INSERT INTO emp VALUES (999, 'a@example.com');  -- duplicates an existing row, succeeds
+ALTER INDEX idx_emp_email REBUILD;
+-- ERROR: could not create unique index "idx_emp_email"
+-- DETAIL: Key (email)=(a@example.com) is duplicated.
+----
+This error comes from the standard uniqueness validation inside `index_build()`, called from within `reindex_index()` — it is not new logic added for this feature, but naturally inherited behavior.
+
+=== Known Limitations
+
+1. **No `USABLE` clause is supported**: consistent with Oracle's behavior, REBUILD is the only path to restoration;
+2. **`REBUILD ONLINE` does not clear UNUSABLE**: the multi-transaction snapshot lifecycle of the concurrent rebuild path is incompatible with appending one additional standalone catalog update afterward;
+3. **Only the root/parent partitioned index itself is unsupported**: running against `RELKIND_PARTITIONED_INDEX` raises an error; each partition's own leaf physical index is unaffected;
+4. **The `SKIP_UNUSABLE_INDEXES` session parameter**: Oracle allows this parameter to control whether a query errors out when it encounters an unusable unique index; this is not supported.

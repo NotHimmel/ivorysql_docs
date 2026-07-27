@@ -15,9 +15,7 @@ IvorySQL由一个核心开发团队维护，该团队拥有对GitHub上的IvoryS
 
 === 行为准则
 
-作为成员，贡献者和领导者，我们每个人都应阅读我们的 *行为准则*。我们承诺让每个人都能参与社区，成为一种无骚扰的体验，无论年龄、体型、有形或无形的残疾、种族、性特征、性别认同和表达、经验水平、教育、社会经济地位、国籍、个人外表、种族、宗教或性身份和取向如何。
-
-​    我们承诺以有助于建立一个开放，热情，多样化，包容和健康社区的方式采取行动和互动。
+我们欢迎所有社区成员、贡献者和领导者阅读并遵守我们的 https://github.com/IvorySQL/IvorySQL/blob/master/CODE_OF_CONDUCT_CN.md[*行为准则*]。我们致力于为每个人创造包容、尊重的参与环境，不论其背景或身份特征如何。行为准则明确了我们对社区行为的期望，确保所有参与者都能在无骚扰的环境中合作。
 
 === 管理说明
 
@@ -112,7 +110,13 @@ IvorySQL 源码托管在 GitHub：<https://github.com/IvorySQL>。
 * https://www.ivorysql.org/zh-cn/assets/files/individual_cla-7703700da5e1ca8f26cb8a68f610d4f2.pdf[个人贡献者]
 * https://www.ivorysql.org/zh-cn/assets/files/corporate_cla-88aa01a7e770ecf89dc401f925c3438e.pdf[企业贡献者]
 
+[TIP]
+如果您通过 AtomGit 平台进行贡献，系统会自动协助您完成 CLA 签署流程，无需手动下载和发送文件。
+
 未签署 CLA 的 Pull Request 将无法进入评审阶段。
+
+[TIP]
+提交 Issue 和提交 PR 是所有类型贡献（代码贡献、文档贡献、组件适配贡献）的公共流程。无论您参与哪种类型的贡献，都需要遵循这两个步骤。
 
 
 == **提交Issue**
@@ -350,7 +354,7 @@ git push -u origin new-branch-name
 
 提交 PR 后，系统会自动在 PR 页面生成预览地址。贡献者可以点击预览链接查看修改后的文档效果，确认修改是否符合预期。维护团队会对 PR 进行评审，如有修改建议会在 PR 中留言，贡献者根据反馈进行修改。评审通过后，维护团队会 merge PR，文档贡献即完成。
 
-== **组件贡献**
+== **组件适配贡献**
 
 IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然继承了 PostgreSQL 丰富的扩展生态。为了让更多的 PostgreSQL 生态组件能够在 IvorySQL 上稳定运行，IvorySQL 社区欢迎外部贡献者参与生态组件的适配工作。
 
@@ -386,10 +390,6 @@ IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然
 [TIP]
 建议在 Issue 获得维护者确认后再开始适配工作，避免重复或无效工作。
 
-===== 签署 CLA
-
-在提交文档贡献之前，请确保您已签署贡献者许可协议（CLA）。详情请参阅本指南的签署 CLA。
-
 ==== 适配测试
 
 生态组件适配的目标分为两个层面：
@@ -405,16 +405,6 @@ IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然
 
 启动 IvorySQL 实例，使用 psql 通过 5432 端口连接数据库，进行以下验证：
 
-. 扩展创建验证（仅适用于扩展类组件）：执行 `CREATE EXTENSION` 确认扩展可以正常创建，并确认版本与预期一致；
-+
-[literal]
-----
-ivorysql=# CREATE EXTENSION <扩展名>;
-ivorysql=# SELECT * FROM pg_available_extensions WHERE name = '<扩展名>';
-----
-+
-[NOTE]
-通过 `shared_preload_libraries` 加载的钩子类组件无需此步骤，改为确认预加载后实例正常启动、组件行为生效。
 
 . 功能测试：根据组件文档提供的功能用例，逐一验证核心功能是否正常工作；
 . 回归测试：如果组件源码自带测试用例，应运行并确保其全部通过；

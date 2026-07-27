@@ -19,11 +19,15 @@ We welcome all community members, contributors, and leaders to read and follow o
 
 === Governance
 
-Teams are continuously open teams focused on parts of the IvorySQL project. A team has its reviewers, committers, and maintainers, and owns one or more repositories. Team-level decisions come from its maintainers. The typical progression path for IvorySQL developers is from user to reviewer, then to committer and maintainer. However, gaining more roles does not mean you have any privileges over other community members. Everyone in the IvorySQL community is equal and has the responsibility to cooperate constructively with other contributors to build a friendly community. These roles are natural rewards for your significant contributions to IvorySQL development, providing you with more rights in the development workflow to improve your efficiency. At the same time, they require you to take on some additional responsibilities:
+The IvorySQL project operates through open, collaborative teams, with each team focusing on specific areas of the project. Each team consists of reviewers, committers, and maintainers who jointly manage one or more repositories. Key decisions at the team level are made by maintainers.
 
-    Team Honor: Now that you are a member of the team as a reviewer/committer/maintainer, it means you represent the project and your team members. So, please be a good person to defend the reputation of the team.
+The typical career progression for IvorySQL developers is: user → reviewer → committer → maintainer. It should be understood that taking on more roles does not mean having special privileges in the community. All participants in the IvorySQL community are equal, and everyone has the responsibility to cooperate constructively with other contributors to create a friendly and inclusive community environment.
 
-    Responsibility: Committers/maintainers have the right to merge pull requests, therefore they take on additional responsibility to deal with the consequences of accepting codebase or documentation changes. This includes rolling back or fixing it when it causes problems, as well as helping the release manager resolve any issues found during the pre-release testing cycle.
+These roles are recognition of your important contributions to IvorySQL development. They provide you with more capabilities in the development workflow to improve work efficiency, while also bringing greater responsibilities:
+
+    *Team Stewardship*: As a reviewer, committer, or maintainer, you now represent the project and team members. You need to uphold the highest standards of professionalism and maintain the reputation of the team and the project.
+
+    *Accountability*: Committers and maintainers have the authority to merge pull requests, while also needing to take responsibility for managing the consequences of code or documentation changes. This includes rolling back or fixing issues when changes cause problems, as well as working closely with the release manager to resolve any issues discovered during the pre-release testing cycle.
 
 == Roles and Responsibilities
 

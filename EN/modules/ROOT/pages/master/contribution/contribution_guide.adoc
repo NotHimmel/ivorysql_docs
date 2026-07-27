@@ -15,7 +15,7 @@ The IvorySQL community welcomes and appreciates all types of contributions, and 
 
 === Code of Conduct
 
-We welcome all community members, contributors, and leaders to read and follow our https://github.com/IvorySQL/IvorySQL/blob/master/CODE_OF_CONDUCT.md[*Code of Conduct*]. We are committed to creating an inclusive and respectful participation environment for everyone, regardless of their background or identity characteristics. The Code of Conduct clarifies our expectations for community behavior, ensuring that all participants can collaborate in a harassment-free environment.
+We welcome all community members and contributors to read and follow our https://github.com/IvorySQL/IvorySQL/blob/master/CODE_OF_CONDUCT.md[*Code of Conduct*]. We are committed to creating an inclusive and respectful participation environment for everyone, regardless of their background or identity characteristics. The Code of Conduct clarifies our expectations for community behavior, ensuring that all participants can collaborate in a harassment-free environment.
 
 === Governance
 

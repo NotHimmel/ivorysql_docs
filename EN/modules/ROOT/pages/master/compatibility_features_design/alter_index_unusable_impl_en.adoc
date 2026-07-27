@@ -14,45 +14,45 @@ This document explains in detail how the `ALTER INDEX ... UNUSABLE` feature in I
 The implementation of `ALTER INDEX ... UNUSABLE` is divided into five layers:
 
 ```
-┌───────────────────────────────────┐
-│  Layer 1: Oracle Parser  (ora_gram.y + ora_kwlist.h)                 │
-│  ─ Adds the UNUSABLE keyword (UNRESERVED_KEYWORD, BARE_LABEL)        │
-│  ─ ALTER INDEX qualified_name UNUSABLE → OraAlterIndexUnusableStmt   │
-└───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 1: Oracle Parser  (ora_gram.y + ora_kwlist.h)                  │
+│  ─ Adds the UNUSABLE keyword (UNRESERVED_KEYWORD, BARE_LABEL)         │
+│  ─ ALTER INDEX qualified_name UNUSABLE → OraAlterIndexUnusableStmt    │
+└───────────────────────────────────────────────────────────────────────┘
 
-┌───────────────────────────────────┐
-│  Layer 2: Statement Dispatch  (tcop/utility.c)                       │
-│  ─ T_OraAlterIndexUnusableStmt appears alongside the existing        │
-│    T_OraAlterIndexRebuildStmt in 4 places: read-only transaction     │
-│    classification / ProcessUtilitySlow / CreateCommandTag /          │
-│    GetCommandLogLevel                                                │
-└───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 2: Statement Dispatch  (tcop/utility.c)                        │
+│  ─ T_OraAlterIndexUnusableStmt appears alongside the existing         │
+│    T_OraAlterIndexRebuildStmt in 4 places: read-only transaction     	│
+│    classification / ProcessUtilitySlow / CreateCommandTag /           │
+│    GetCommandLogLevel                                                 │
+└───────────────────────────────────────────────────────────────────────┘
 
-┌───────────────────────────────────┐
-│  Layer 3: Execution Layer  (commands/indexcmds.c)                    │
-│  ─ ExecOraAlterIndexUnusable(): permission check, resolves and       │
-│    locks the target index, rejects partitioned indexes, calls        │
-│    index_set_unusable(indexOid, true)                                │
-└───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 3: Execution Layer  (commands/indexcmds.c)                     │
+│  ─ ExecOraAlterIndexUnusable(): permission check, resolves and        │
+│    locks the target index, rejects partitioned indexes, calls         │
+│    index_set_unusable(indexOid, true)                                 │
+└───────────────────────────────────────────────────────────────────────┘
 
-┌───────────────────────────────────┐
+┌─────────────────────────────────────────────────────────────────────────┐
 │  Layer 4: Catalog Layer  (catalog/index.c + include/catalog/pg_index.h) │
-│  ─ Adds the pg_index.indisunusable column                            │
-│  ─ index_set_unusable(): a standalone catalog update function        │
-│    structurally mirroring index_set_state_flags()                    │
-│  ─ index_create()'s values[] array is extended with an initial       │
-│    value (false) for this column                                     │
-│  ─ reindex_index() clears this flag as part of its existing          │
-│    "repair index state" branch                                       │
-└───────────────────────────────────┘
+│  ─ Adds the pg_index.indisunusable column                               │
+│  ─ index_set_unusable(): a standalone catalog update function           │
+│    structurally mirroring index_set_state_flags()                       │
+│  ─ index_create()'s values[] array is extended with an initial          │
+│    value (false) for this column                                        │
+│  ─ reindex_index() clears this flag as part of its existing             │
+│    "repair index state" branch                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 
-┌───────────────────────────────────┐
-│  Layer 5: Planner / Executor  (plancat.c + BuildIndexInfo)           │
-│  ─ get_relation_info() skips indexes with indisunusable set          │
-│  ─ BuildIndexInfo() makes ii_ReadyForInserts reflect this flag as    │
-│    well, so the existing skip logic in execIndexing.c naturally      │
-│    covers it — no changes to the executor itself are needed          │
-└───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 5: Planner / Executor  (plancat.c + BuildIndexInfo)            │
+│  ─ get_relation_info() skips indexes with indisunusable set           │
+│  ─ BuildIndexInfo() makes ii_ReadyForInserts reflect this flag as     │
+│    well, so the existing skip logic in execIndexing.c naturally       │
+│    covers it — no changes to the executor itself are needed           │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
 === Grammar and Parsing

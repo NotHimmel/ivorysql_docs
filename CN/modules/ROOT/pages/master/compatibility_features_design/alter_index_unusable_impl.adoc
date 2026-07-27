@@ -14,40 +14,40 @@
 `ALTER INDEX ... UNUSABLE` 的实现分为五个层次：
 
 ```
-┌───────────────────────────────────┐
-│  Layer 1: Oracle 解析器  (ora_gram.y + ora_kwlist.h)                 │
-│  ─ 新增 UNUSABLE 关键字（UNRESERVED_KEYWORD, BARE_LABEL）           │
-│  ─ ALTER INDEX qualified_name UNUSABLE → OraAlterIndexUnusableStmt │
-└───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 1: Oracle 解析器  (ora_gram.y + ora_kwlist.h)                  │
+│  ─ 新增 UNUSABLE 关键字（UNRESERVED_KEYWORD, BARE_LABEL）             │
+│  ─ ALTER INDEX qualified_name UNUSABLE → OraAlterIndexUnusableStmt    │
+└───────────────────────────────────────────────────────────────────────┘
 
-┌───────────────────────────────────┐
-│  Layer 2: 语句分发  (tcop/utility.c)                                 │
-│  ─ T_OraAlterIndexUnusableStmt 与既有 T_OraAlterIndexRebuildStmt    │
-│    并列出现在 4 处：只读事务分类 / ProcessUtilitySlow /              │
-│    CreateCommandTag / GetCommandLogLevel                             │
-└───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 2: 语句分发  (tcop/utility.c)                                  │
+│  ─ T_OraAlterIndexUnusableStmt 与既有 T_OraAlterIndexRebuildStmt      │
+│    并列出现在 4 处：只读事务分类 / ProcessUtilitySlow /               │
+│    CreateCommandTag / GetCommandLogLevel                              │
+└───────────────────────────────────────────────────────────────────────┘
 
-┌───────────────────────────────────┐
-│  Layer 3: 执行层  (commands/indexcmds.c)                             │
-│  ─ ExecOraAlterIndexUnusable()：权限检查、解析锁定目标索引、        │
-│    拒绝分区索引、调用 index_set_unusable(indexOid, true)             │
-└───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 3: 执行层  (commands/indexcmds.c)                              │
+│  ─ ExecOraAlterIndexUnusable()：权限检查、解析锁定目标索引、          │
+│    拒绝分区索引、调用 index_set_unusable(indexOid, true)              │
+└───────────────────────────────────────────────────────────────────────┘
 
-┌───────────────────────────────────┐
-│  Layer 4: 目录层  (catalog/index.c + include/catalog/pg_index.h)     │
-│  ─ 新增 pg_index.indisunusable 列                                   │
-│  ─ index_set_unusable()：与 index_set_state_flags() 同构的独立      │
-│    catalog 更新函数                                                  │
-│  ─ index_create() 的 values[] 数组补充该列初始值（false）           │
-│  ─ reindex_index() 在既有"修复索引状态"分支中一并清除该标记         │
-└───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 4: 目录层  (catalog/index.c + include/catalog/pg_index.h)      │
+│  ─ 新增 pg_index.indisunusable 列                                     │
+│  ─ index_set_unusable()：与 index_set_state_flags() 同构的独立        │
+│    catalog 更新函数                                                   │
+│  ─ index_create() 的 values[] 数组补充该列初始值（false）             │
+│  ─ reindex_index() 在既有"修复索引状态"分支中一并清除该标记           │
+└───────────────────────────────────────────────────────────────────────┘
 
-┌───────────────────────────────────┐
-│  Layer 5: 规划器 / 执行器  (plancat.c + BuildIndexInfo)              │
-│  ─ get_relation_info() 跳过 indisunusable 的索引                    │
-│  ─ BuildIndexInfo() 令 ii_ReadyForInserts 一并反映该标记，          │
-│    execIndexing.c 既有的跳过逻辑自然覆盖，无需改动执行器本身         │
-└───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 5: 规划器 / 执行器  (plancat.c + BuildIndexInfo)               │
+│  ─ get_relation_info() 跳过 indisunusable 的索引                      │
+│  ─ BuildIndexInfo() 令 ii_ReadyForInserts 一并反映该标记，            │
+│    execIndexing.c 既有的跳过逻辑自然覆盖，无需改动执行器本身          │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
 === 语法与解析

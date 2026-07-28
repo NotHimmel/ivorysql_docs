@@ -118,13 +118,29 @@ If you contribute via the AtomGit platform, the system will automatically assist
 
 Pull Requests from contributors who have not signed the CLA will not be able to enter the review stage.
 
-[TIP]
+
+== **Common Contribution Process**
+
 Submitting Issues and submitting PRs are common processes for all types of contributions (code contributions, documentation contributions, component adaptation contributions). Regardless of which type of contribution you participate in, you need to follow these two steps.
 
 
-== **Submit Issue**
+=== Claim an Issue
 
-=== Enter New issue page:
+Before starting your contribution, you need to find or create an Issue in the target repository:
+
+. Browse the repository's Issue list and search for Issues related to what you want to contribute
+. If you find a relevant Issue, confirm that it has not been assigned (Assignees is empty)
+. If the Issue is unassigned, click `Assign yourself` in the Assignees area in the upper right corner to claim the Issue for yourself
+. If the Issue has already been claimed by someone else, please choose another Issue or negotiate with the claimant
+. If no relevant Issue is found, create a new Issue describing what you want to contribute and assign it to yourself
+. Wait for maintainer evaluation and confirmation, and start your contribution work only after receiving maintainer confirmation
+
+[TIP]
+It is recommended to start working only after the Issue is confirmed by maintainers to avoid duplicate or invalid work.
+
+=== Submit Issue
+
+==== Enter New issue page:
 
 1. Go to IvorySQL official website: https://github.com/IvorySQL/IvorySQL
 
@@ -133,7 +149,7 @@ Submitting Issues and submitting PRs are common processes for all types of contr
 image::p3.png[]
 
 
-=== Select the issue type to fill in
+==== Select the issue type to fill in
 
 **1. bug report**
 
@@ -192,22 +208,22 @@ Describe a feature you expect to be implemented
 ```
 
 
-=== Submit
+==== Submit
 
 Click the submit new issue button to submit
 
-== **Submit PR**
+=== Submit PR
 
 For submitting a PR, you should keep one feature or one bug per submission. Submitting multiple features at once is prohibited.
 
 
-=== Create a Pull Request
+==== Create a Pull Request
 
 1. Open your Forked repository (replace $user with your GitHub ID).
 
     2. Click Compare & pull request button
 
-=== Fill in PR information
+==== Fill in PR information
 
 ```
 Fix test
@@ -219,7 +235,7 @@ leave a comment
 Provide a more detailed description of the submitted function
 ```
 
-=== Submit PR
+==== Submit PR
 
 Click the Create pull request button to submit.
 
@@ -383,15 +399,13 @@ Before starting the adaptation work, please first check the xref:master/ecosyste
 
 ===== Claim or Create Issue
 
-Search for the target component in the https://github.com/IvorySQL/IvorySQL/issues[Issue list] of the IvorySQL repository:
+Follow the steps in the xref:#_claim_an_issue[Claim an Issue] section to claim or create an Issue, and note the following component adaptation-specific requirements:
 
-- If the relevant adaptation Issue already exists, first confirm that it has not been assigned (Assignees is empty), then click `Assign yourself` in the Assignees area in the upper right corner to claim this Issue for yourself; if it has already been claimed by others, please reselect the component;
-- If the relevant Issue does not exist yet, create a new `Feature Request` type Issue, add the `extension` label, and assign it to yourself. The format for creating a new Issue can refer to existing ecosystem component adaptation Issues: the title format is `Ecosystem Integration: <component name>`, and the body uses one sentence to explain the component to be adapted and its purpose.
+- When creating a new Issue, select the `Feature Request` type and add the `extension` label
+- Title format: `Ecosystem Integration: <component name>`
+- Use one sentence in the body to explain the component to be adapted and its purpose
 
 Maintainers will evaluate whether the component is suitable for inclusion in the IvorySQL ecosystem and communicate with you in the Issue for confirmation.
-
-[TIP]
-It is recommended to start the adaptation work after the Issue is confirmed by maintainers to avoid duplicate or invalid work.
 
 ==== Adaptation Testing
 

@@ -118,13 +118,29 @@ IvorySQL 源码托管在 GitHub：<https://github.com/IvorySQL>。
 
 未签署 CLA 的 Pull Request 将无法进入评审阶段。
 
-[TIP]
+
+== **通用贡献流程**
+
 提交 Issue 和提交 PR 是所有类型贡献（代码贡献、文档贡献、组件适配贡献）的公共流程。无论您参与哪种类型的贡献，都需要遵循这两个步骤。
 
 
-== **提交Issue**
+=== 认领 Issue
 
-=== 进入New issue 页面：
+在开始贡献之前，您需要在目标仓库的 Issue 列表中找到或创建一个 Issue：
+
+. 浏览仓库的 Issue 列表，搜索与您想要贡献的内容相关的 Issue
+. 如果找到相关 Issue，确认其尚未被分配（Assignees 为空）
+. 如果 Issue 未被分配，点击右上角 Assignees 区域的 `Assign yourself`，将 Issue 认领给自己
+. 如果 Issue 已被他人认领，请选择其他 Issue 或与认领者协商
+. 如果没有找到相关 Issue，新建一个 Issue，描述您想要贡献的内容，并分配给自己
+. 等待维护者评估和确认，在获得维护者确认后再开始贡献工作
+
+[TIP]
+建议在 Issue 获得维护者确认后再开始工作，避免重复或无效工作。
+
+=== 提交Issue
+
+==== 进入New issue 页面：
 
 1、进入 IvorySql官网：https://github.com/IvorySQL/IvorySQL 
 
@@ -133,7 +149,7 @@ IvorySQL 源码托管在 GitHub：<https://github.com/IvorySQL>。
 image::p3.png[]
 
 
-=== 选择需要填写的issue类型
+==== 选择需要填写的issue类型
 
 **1、bug report**
 
@@ -192,22 +208,22 @@ Title: 标题
 ```
 
 
-=== 提交
+==== 提交
 
 点击 submit new issue 按钮, 提交即可
 
-== **提交PR**
+=== 提交PR
 
 对于提交一个PR应该保持一个功能，或者一个bug提交一次。禁止多个功能一次提交。
 
 
-=== 创建一个Pull Request
+==== 创建一个Pull Request
 
 1、打开你 Fork 的仓库（将 $user 替换为你的 GitHub ID）。
 
     2、点击 Compare & pull request 按钮
 
-=== 填写PR信息
+==== 填写PR信息
 
 ```
 Fix test
@@ -219,7 +235,7 @@ leave a comment
 对该提交功能进行比较详细的描述
 ```
 
-=== 提交PR
+==== 提交PR
 
 点击Create pull request 按钮即可提交。
 
@@ -383,15 +399,13 @@ IvorySQL 作为一款基于 PostgreSQL 研发的 Oracle 兼容数据库，天然
 
 ===== 认领或新建 Issue
 
-在 IvorySQL 仓库的 https://github.com/IvorySQL/IvorySQL/issues[Issue 列表] 中搜索目标组件：
+按照 xref:#_认领_issue[认领 Issue] 章节的步骤认领或新建 Issue，并注意以下组件适配特有的要求：
 
-- 如果相关适配 Issue 已存在，先确认其尚未被分配（Assignees 为空），然后点击右上角 Assignees 区域的 `Assign yourself`，将该 Issue 认领给自己；若已被他人认领，请重新选择组件；
-- 如果相关 Issue 尚不存在，则新建一个 `Feature Request` 类型的 Issue，添加 `extension` 标签，并分配给自己。新建 Issue 的格式可参考已有的生态组件适配类 Issue：标题格式为 `Ecosystem Integration: <组件名>`，正文用一句话说明要适配的组件及其用途。
+- 新建 Issue 时，选择 `Feature Request` 类型，添加 `extension` 标签
+- 标题格式：`Ecosystem Integration: <组件名>`
+- 正文用一句话说明要适配的组件及其用途
 
 维护者会评估该组件是否适合纳入 IvorySQL 生态，并在 Issue 中与您沟通确认。
-
-[TIP]
-建议在 Issue 获得维护者确认后再开始适配工作，避免重复或无效工作。
 
 ==== 适配测试
 

@@ -130,7 +130,7 @@ ALTER INDEX idx_emp_email REBUILD;
 CLUSTER emp;  -- 恢复后重新可用
 ----
 
-同理，若某索引被 `ALTER TABLE ... REPLICA IDENTITY USING INDEX` 指定为复制身份索引，标记为 UNUSABLE 期间逻辑复制会跳过该索引（旧行镖像不再包含旧的主键/唯一键值，而不是给出陈旧或错误的值），REBUILD 后自动恢复正常。
+同理，若某索引被 `ALTER TABLE ... REPLICA IDENTITY USING INDEX` 指定为复制身份索引，标记为 UNUSABLE 期间逻辑复制会跳过该索引（旧行镜像不再包含旧的主键/唯一键值，而不是给出陈旧或错误的值），REBUILD 后自动恢复正常。
 
 == 错误处理
 

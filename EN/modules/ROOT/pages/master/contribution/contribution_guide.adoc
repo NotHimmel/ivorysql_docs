@@ -121,7 +121,7 @@ Pull Requests from contributors who have not signed the CLA will not be able to 
 
 == **Common Contribution Process**
 
-Claiming an Issue, submitting an Issue, and submitting a PR are common processes for all types of contributions (code contributions, documentation contributions, component adaptation contributions). Regardless of which type of contribution you participate in, you need to follow these three steps.
+Submitting an Issue, claiming an Issue, and submitting a PR are common processes for all types of contributions (code contributions, documentation contributions, component adaptation contributions). Regardless of which type of contribution you participate in, you need to follow these three steps.
 
 
 === Submit Issue

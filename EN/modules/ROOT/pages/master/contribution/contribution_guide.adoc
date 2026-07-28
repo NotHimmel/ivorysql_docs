@@ -1,0 +1,657 @@
+
+:sectnums:
+:sectnumlevels: 5
+
+:imagesdir: ./_images
+= **IvorySQL Community Contribution Guide**
+
+== **Overview**
+
+=== Introduction
+
+IvorySQL is maintained by a core development team that has commit access to the main IvorySQL repository on GitHub. We eagerly welcome contributions from members of the broader IvorySQL community. If you want to see your code or documentation changes added to IvorySQL and appearing in future releases, this section covers what you need to know.
+
+The IvorySQL community welcomes and appreciates all types of contributions, and we look forward to your participation!
+
+=== Code of Conduct
+
+We welcome all community members and contributors to read and follow our https://github.com/IvorySQL/IvorySQL/blob/master/CODE_OF_CONDUCT.md[*Code of Conduct*]. We are committed to creating an inclusive and respectful participation environment for everyone, regardless of their background or identity characteristics. The Code of Conduct clarifies our expectations for community behavior, ensuring that all participants can collaborate in a harassment-free environment.
+
+=== Governance
+
+The IvorySQL project operates through open, collaborative teams, with each team focusing on specific areas of the project. Each team consists of reviewers, committers, and maintainers who jointly manage one or more repositories. Key decisions at the team level are made by maintainers.
+
+The typical career progression for IvorySQL developers is: user → reviewer → committer → maintainer. It should be understood that taking on more roles does not mean having special privileges in the community. All participants in the IvorySQL community are equal, and everyone has the responsibility to cooperate constructively with other contributors to create a friendly and inclusive community environment.
+
+These roles are recognition of your important contributions to IvorySQL development. They provide you with more capabilities in the development workflow to improve work efficiency, while also bringing greater responsibilities:
+
+* *Team Stewardship*: As a reviewer, committer, or maintainer, you now represent the project and team members. You need to uphold the highest standards of professionalism and maintain the reputation of the team and the project.
+* *Accountability*: Committers and maintainers have the authority to merge pull requests, while also needing to take responsibility for managing the consequences of code or documentation changes. This includes rolling back or fixing issues when changes cause problems, as well as working closely with the release manager to resolve any issues discovered during the pre-release testing cycle.
+
+== Roles and Responsibilities
+
+Before contributing, please confirm your current participation role to more efficiently understand the contribution methods suitable for you:
+
+=== Users
+
+As a user, you play an important role in using IvorySQL. We encourage you to:
+
+==== Provide Feedback and Requirements
+
+* Found a bug, performance issue, or inaccurate documentation?
+* Have new feature suggestions or usage experience improvements?
+
+If you are preparing to report a bug or submit requirements to the community, please submit an Issue in the corresponding IvorySQL community repository and refer to the Submit Issue section of this guide.
+
+==== Participate in Community Discussions
+
+* Discuss through the https://lists.ivorysql.org[mailing list]
+* Join https://github.com/IvorySQL/IvorySQL/discussions[GitHub Discussions] to supplement information or verify issues
+* Participate in technical discussions in WeChat, Discord, and other chat groups
+
+=== Contributors
+
+We welcome all types of contributions including code, documentation, testing, etc.
+
+==== Find Projects You're Interested In
+
+We divide the repositories into multiple sub-projects. You can find projects of interest and their code repositories from the following list:
+
+[cols="1,1"]
+|===
+|Repository | Description
+
+|https://github.com/IvorySQL/IvorySQL[IvorySQL] | Responsible for the development and maintenance of the IvorySQL database
+|https://github.com/IvorySQL/Ivory-www[Ivory-www] | Responsible for the development and maintenance of the community website
+|https://github.com/IvorySQL/ivory-operator[ivory-operator] | Responsible for the development and maintenance of IvorySQL cloud-native database and peripheral tools
+|https://github.com/IvorySQL/docker_library[docker_library] | Responsible for the construction and maintenance of IvorySQL multi-architecture images
+|https://github.com/IvorySQL/ivory-cloud[ivory-cloud] | Responsible for the development and maintenance of IvorySQL cloud service platform and peripheral ecosystem
+|https://github.com/IvorySQL/ivorysql_docs[Ivorysql_docs] | Responsible for the development and maintenance of the community documentation center
+|https://github.com/IvorySQL/ivory-doc-builder[ivory-doc-builder] | Responsible for compiling Ivorysql_docs
+|https://github.com/IvorySQL/ivorysql_web[Ivorysql_web] | Responsible for the maintenance of the community documentation website
+|https://github.com/IvorySQL/ivorysql-wasm[Ivorysql_wasm] | Responsible for the development and maintenance of the IvorySQL online experience website
+|===
+
+==== Assign Issues to Yourself
+
+You can assign Issues you created or Issues you are willing to handle to yourself. Simply enter `/assign` in the comment box, and the bot will assign the issue to you. There may already be communication and discussion among participants under each Issue. If you are interested, you can also express your opinions in the comment box to participate in Issue discussions.
+
+=== Maintainers
+
+Maintainers are responsible for managing IvorySQL code, PR reviews, leading version releases, and IvorySQL development direction.
+
+==== Community Planning
+
+* Develop version planning and Roadmap
+* Track and evaluate community needs
+* Maintain a public TODO list
+
+==== Code Management
+
+* Participate in Pull Request reviews
+* Review security issues to ensure project health
+
+==== Process and Governance Mechanisms
+
+* Optimize collaboration mechanisms (code contribution guides, PR templates, etc.)
+* Establish vulnerability response mechanisms and codes of conduct
+
+== Getting Started
+
+=== Register a GitHub Account
+
+Whether you want to submit Issues, participate in discussions, or contribute code and documentation, you need to log in with a GitHub account and interact with the IvorySQL project.
+
+Please refer to <https://docs.github.com/en/get-started/start-your-journey> to register your GitHub account and familiarize yourself with Git tools and workflows.
+
+IvorySQL source code is hosted on GitHub: <https://github.com/IvorySQL>.
+
+=== Sign the CLA
+
+Before submitting code or documentation contributions, to ensure code legality and compliance, individual or corporate contributors need to sign the Contributor License Agreement (CLA). Signing the CLA is a necessary condition for the IvorySQL community to accept contributions, ensuring your contributions are legally distributed. Please download the CLA according to the following links, sign it, and send the signed CLA to cla@ivorysql.org.
+
+* https://www.ivorysql.org/assets/files/individual_cla-7703700da5e1ca8f26cb8a68f610d4f2.pdf[Individual Contributor]
+* https://www.ivorysql.org/assets/files/corporate_cla-88aa01a7e770ecf89dc401f925c3438e.pdf[Corporate Contributor]
+
+[TIP]
+If you contribute via the AtomGit platform, the system will automatically assist you in completing the CLA signing process, without the need to manually download and send files.
+
+Pull Requests from contributors who have not signed the CLA will not be able to enter the review stage.
+
+
+== **Common Contribution Process**
+
+Submitting an Issue, claiming an Issue, and submitting a PR are common processes for all types of contributions (code contributions, documentation contributions, component adaptation contributions). Regardless of which type of contribution you participate in, you need to follow these three steps.
+
+
+=== Submit Issue
+
+==== Enter New issue page:
+
+1. Go to IvorySQL official website: https://github.com/IvorySQL/IvorySQL
+
+2. Click New issue
+
+image::p3.png[]
+
+
+==== Select the issue type to fill in
+
+**1. bug report**
+
+```
+Title: Title
+```
+
+```
+## Bug Report
+Describe the bug
+
+
+\### IvorySQL Version
+The version of IvorySQL where the problem was found
+
+\### OS Version (uname -a)
+System version
+
+\### Configuration options  ( config.status --config )
+Configuration parameters
+
+\### Current Behavior
+Current result
+
+\### Expected behavior/code
+Expected result
+
+\### Step to reproduce
+Reproduction steps
+
+\### Additional context that can be helpful for identifying the problem
+Other information helpful for identifying the problem
+```
+
+
+**2. Enhancement**
+
+```
+Title: Title
+```
+
+```
+## Enhancement
+Describe the functions you expect to be strengthened
+```
+
+**3. Feature Request**
+
+```
+Title: Title
+```
+
+```
+## Feature Request
+Describe a feature you expect to be implemented
+```
+
+
+==== Submit
+
+Click the submit new issue button to submit
+
+=== Claim an Issue
+
+Before starting your contribution, you need to find or create an Issue in the target repository:
+
+. Browse the repository's Issue list and search for Issues related to what you want to contribute
+. If you find a relevant Issue, confirm that it has not been assigned (Assignees is empty)
+. If the Issue is unassigned, click `Assign yourself` in the Assignees area in the upper right corner to claim the Issue for yourself
+. If the Issue has already been claimed by someone else, please choose another Issue or negotiate with the claimant
+. If no relevant Issue is found, create a new Issue describing what you want to contribute and assign it to yourself
+. Wait for maintainer evaluation and confirmation, and start your contribution work only after receiving maintainer confirmation
+
+[TIP]
+It is recommended to start working only after the Issue is confirmed by maintainers to avoid duplicate or invalid work.
+
+=== Submit PR
+
+For submitting a PR, you should keep one feature or one bug per submission. Submitting multiple features at once is prohibited.
+
+
+==== Create a Pull Request
+
+1. Open your Forked repository (replace $user with your GitHub ID).
+
+    2. Click Compare & pull request button
+
+==== Fill in PR information
+
+```
+Fix test
+Function description
+```
+
+```
+leave a comment
+Provide a more detailed description of the submitted function
+```
+
+==== Submit PR
+
+Click the Create pull request button to submit.
+
+== **Code Contribution**
+
+=== Fork IvorySQL Repository
+
+1. Open the ivorysql repository https://github.com/IvorySQL/IvorySQL
+
+2. Click the fork button in the upper right corner and wait for the fork to complete
+
+=== Clone the forked repository to local
+
+```
+cd $working_dir # Replace $working_dir with the directory where you want to place the repo. For example, `cd ~/Documents/GitHub`
+
+git clone git@github.com:$user/IvorySQL.git # Replace `$user` with your GitHub ID
+```
+
+=== Create a new Branch
+
+```
+cd $working_dir/IvorySQL
+
+git checkout -b new-branch-name
+```
+
+=== Modify Code
+
+Modify the code in the newly created new-branch-name.
+
+=== Generate commit
+
+```
+Git add <file>
+
+Git commit -m "commit-message"
+```
+
+=== Push changes to remote
+
+```
+Git push -u origin new-branch-name
+```
+
+After completing the code push, please refer to the xref:#_submit_pr[Submit PR] section to create a Pull Request.
+
+== **Documentation Contribution**
+
+The IvorySQL community provides bilingual documentation. English documentation is saved in the EN/ directory, and Chinese documentation is saved in the CN/ directory. You can contribute to either documentation, or you can contribute to both at the same time. Documentation contributions follow the "fork - pull request - merge" process.
+
+=== Documentation Center Structure
+
+The IvorySQL documentation center consists of three parts:
+
+* https://github.com/IvorySQL/ivorysql_docs[Documentation Files]: Stores all AsciiDoc format source files
+* https://github.com/IvorySQL/ivorysql_web[Static Web Files]: Stores the generated static web pages
+* https://github.com/IvorySQL/ivory-doc-builder[Web Template Files]: Templates and configurations used to generate web pages
+
+If you only want to modify existing content or add new pages, you only need to fork the documentation files repository. If you want to deeply participate in the documentation center construction (such as modifying the web UI), you need to fork all three repositories at the same time.
+
+=== Contribution Methods
+
+You can start from any of the following to help improve IvorySQL documentation:
+
+* Write and improve documentation
+* Fix spelling errors or formatting (punctuation, spaces, indentation, code blocks, etc.)
+* Correct or update inappropriate or outdated instructions
+* Add missing content (sentences, paragraphs, or new documentation)
+* Translate documentation changes from English to Chinese, or from Chinese to English
+* Submit, reply to, and resolve documentation issues
+* (Advanced) Review pull requests created by others
+
+=== Method 1: Quick Edit via Website (Suitable for Small Modifications)
+
+For simple modifications (such as fixing spelling errors, updating a small amount of content), you can do it directly through the website:
+
+. Click the `Edit this page` button in the upper right corner of the documentation page
+. The system will jump to the editing page of the corresponding source file on GitHub
+. Modify the content according to AsciiDoc format
+. Fill in the modification description and submit the PR
+
+This method does not require a local environment and is suitable for quickly correcting small problems.
+
+=== Method 2: Complete Git Workflow (Suitable for Larger Changes)
+
+For larger changes or adding new pages, it is recommended to use the complete Git workflow:
+
+==== Fork Documentation Repository
+
+1. Open the documentation repository https://github.com/IvorySQL/ivorysql_docs
+
+2. Click the fork button in the upper right corner and wait for the fork to complete
+
+==== Clone the forked repository to local
+
+```
+cd $working_dir # Replace $working_dir with the directory where you want to place the repo
+
+git clone git@github.com:$user/ivorysql_docs.git # Replace `$user` with your GitHub ID
+```
+
+==== Create a new Branch
+
+```
+cd $working_dir/ivorysql_docs
+
+git checkout -b new-branch-name
+```
+
+==== Edit Documentation
+
+Edit the documentation in the newly created new-branch-name. IvorySQL documentation is written in AsciiDoc format. Please refer to xref:master/contribution/asciidoc_syntax_reference.adoc[AsciiDoc Syntax Reference].
+
+When adding new pages:
+. Place the `.adoc` file in the correct directory (CN/ or EN/ corresponding version directory)
+. Chinese and English files should have the same name
+. Modify the corresponding `nav.adoc` file to add navigation links
+
+==== Generate commit
+
+```
+git add <file>
+
+git commit -m "commit-message"
+```
+
+==== Push changes to remote
+
+```
+git push -u origin new-branch-name
+```
+
+After completing the documentation push, please refer to the xref:#_submit_pr[Submit PR] section to create a Pull Request.
+
+After submitting the PR, the system will automatically generate a preview address on the PR page. Contributors can click the preview link to view the modified documentation effect and confirm whether the modification meets expectations. The maintenance team will review the PR, and if there are modification suggestions, they will leave a message in the PR. Contributors will modify according to the feedback. After the review is passed, the maintenance team will merge the PR, and the documentation contribution is complete.
+
+== **Component Adaptation Contribution**
+
+As an Oracle-compatible database developed based on PostgreSQL, IvorySQL naturally inherits PostgreSQL's rich extension ecosystem. To enable more PostgreSQL ecosystem components to run stably on IvorySQL, the IvorySQL community welcomes external contributors to participate in the adaptation of ecosystem components.
+
+=== Adaptation Scope
+
+The following types of components are welcome for contributors to adapt:
+
+* Official PostgreSQL community extensions (contrib modules)
+* Third-party plugins developed based on PostgreSQL's extension mechanism
+* Peripheral ecosystem tools that work with the database as independent processes, such as connection pools, proxies, middleware, etc.
+
+=== Contribution Process
+
+Ecosystem component adaptation is the work of adapting PostgreSQL ecosystem components to IvorySQL. The main content includes: understanding the characteristics, principles, and usage of the target component, testing whether it can be used normally in IvorySQL's PG mode and Oracle compatibility mode; finally, based on the above research and test results, write an ecosystem component adaptation document and submit it to the https://github.com/IvorySQL/ivorysql_docs[IvorySQL docs] repository. After the document is submitted, maintainers will reproduce the test of the target component according to the steps given in the adaptation document, and merge the PR after confirming that the test results are consistent with the document description.
+
+For specific topic selection, testing, documentation writing, and other links, please refer to the detailed steps below.
+
+==== Topic Selection and Communication
+
+===== Confirm Component Is Not Yet Adapted
+
+Before starting the adaptation work, please first check the xref:master/ecosystem_components/ecosystem_overview.adoc[Ecosystem Component Adaptation List] to confirm whether the target component has been adapted. If the target component is not in the list, continue with the following process; otherwise, please reselect an unadapted component.
+
+===== Claim or Create Issue
+
+Follow the steps in the xref:#_claim_an_issue[Claim an Issue] section to claim or create an Issue, and note the following component adaptation-specific requirements:
+
+- When creating a new Issue, select the `Feature Request` type and add the `extension` label
+- Title format: `Ecosystem Integration: <component name>`
+- Use one sentence in the body to explain the component to be adapted and its purpose
+
+Maintainers will evaluate whether the component is suitable for inclusion in the IvorySQL ecosystem and communicate with you in the Issue for confirmation.
+
+==== Adaptation Testing
+
+The goals of ecosystem component adaptation are divided into two levels:
+
+- PG mode: The component must be fully usable.
+- Oracle compatibility mode: It should be fully usable as much as possible; if it cannot be fully usable, at least the main functions should be able to run normally. For PG-specific extensions whose underlying mechanisms conflict with Oracle compatibility mode and cannot run in this mode at all (such as pg_partman, which is specially designed to manage PostgreSQL partitioned tables and does not support running in Oracle compatibility mode), it is necessary to explain the situation in the adaptation document and PR description.
+
+===== Component Compilation and Installation
+
+Please refer to the official documentation of the target component for compilation and installation.
+
+===== Test PG Mode
+
+Start an IvorySQL instance, use psql to connect to the database through port 5432, and perform the following verifications:
+
+
+. Functional testing: Verify the core functions one by one according to the functional test cases provided in the component documentation;
+. Regression testing: If the component source code comes with its own test cases, they should be run and ensured to pass completely;
+. Boundary testing: Test boundary conditions and exception scenarios to confirm the robustness of the component.
+
+If a certain function cannot be used or the test fails, it is necessary to investigate the cause: for problems on the IvorySQL side, please submit a PR to the IvorySQL repository for repair; for problems on the component side, you can provide feedback to the component repository and record this limitation in the adaptation document.
+
+===== Test Oracle Compatibility Mode
+
+Use psql to connect to the database through port 1521 (Oracle compatibility port) and perform the following verifications:
+
+. Refer to the test method of PG mode to verify the main functions of the component;
+. Test the data type compatibility of the component in Oracle compatibility mode;
+. Test whether the component functions support Oracle-style anonymous blocks, stored procedures, functions, etc.
+
+Record whether each function is available in Oracle compatibility mode, as the basis for the functional coverage description in the adaptation document.
+
+Please pay attention to the following two points when testing:
+
+* *Use Oracle syntax to write test statements*. Some syntax in Oracle compatibility mode is different from PG mode, and PG mode test cases cannot be directly copied. For example: the interval type needs to use Oracle-style syntax instead of PG syntax; statements such as `CREATE FUNCTION` and `CREATE PROCEDURE` need to add `/` as a terminator on a new line at the end.
+* *Distinguish between "output differences" and "functional abnormalities"*. Some outputs that are inconsistent with PG mode are normal phenomena and should not be recorded as compatibility issues. For example: type names in some outputs will have the `pg_catalog.` schema prefix. To determine whether a function is normal, it should be based on whether the semantics of the execution result are correct, rather than requiring the output text to be exactly the same as PG mode character by character.
+
+Record whether each function is available in Oracle compatibility mode, as the basis for the functional coverage description in the adaptation document.
+
+[NOTE]
+Not all components can work in Oracle compatibility mode. If executing `CREATE EXTENSION` or calling component functions fails due to syntax errors, it is mostly because the component internally uses PG-specific syntax that Oracle does not support. Please refer to the PG syntax whitelist mechanism in the next section for repair; if the component conflicts with Oracle compatibility mode at the underlying mechanism level (such as pg_partman), it is necessary to clearly explain in the adaptation document and PR description.
+
+===== Fix Compatibility Issues Through PG Syntax Whitelist
+
+A common reason why Oracle compatibility mode testing fails—especially when executing `CREATE EXTENSION` fails directly—is that the extension is implemented through SQL scripts, and the scripts use a large number of PG-specific syntax that Oracle does not support (such as PG-style interval expressions, array slicing, etc.), causing the scripts to fail to pass the syntax parsing in Oracle compatibility mode.
+
+In response to this situation, the IvorySQL kernel provides a PG syntax whitelist mechanism (see the `PgDialectExtensions` list in `src/backend/commands/extension.c`). After the extension is added to the whitelist, when executing `CREATE EXTENSION` in an Oracle compatibility mode cluster:
+
+* The extension's installation script will temporarily switch to using the PG parser for parsing and execution, unaffected by the current session's compatibility mode;
+* Functions created by the installation script will be automatically injected with the `SET ivorysql.compatible_mode = pg` configuration, and thereafter, regardless of which compatibility mode session calls them, the function body will be parsed and executed by the PG parser.
+
+With this mechanism, extensions implemented using PG-specific syntax can be installed and run normally in Oracle compatibility mode clusters without modifying any code. The whitelist currently includes extensions such as pg_profile and pg_repack.
+
+This method is applicable to:
+
+* Extensions mainly implemented through SQL or PL/pgSQL, where `CREATE EXTENSION` or function calls fail in Oracle compatibility mode due to the use of PG-specific syntax;
+* Extensions whose functions are self-contained (such as management extensions for statistics collection, table reorganization, etc.), where users only need to call their entry functions, and do not require their internal implementation to interact with Oracle-style objects.
+
+This method is not applicable to:
+
+* Extensions that need to deeply interact with Oracle-style objects (stored procedures, Oracle proprietary data types, etc.) created by users, forcing parsing according to PG syntax will destroy this interaction;
+* Extensions that conflict with Oracle compatibility mode at the underlying mechanism level (such as pg_partman, which relies on PostgreSQL's native partitioned table management). Such problems are not at the syntax parsing level, and the whitelist cannot solve them. It is still necessary to explain the limitations in the adaptation document and PR description.
+
+After confirming that the target extension belongs to the applicable scenario, you can submit a PR to the IvorySQL repository to add the extension name to the `PgDialectExtensions` whitelist, and attach the test results under both modes in the PR description; at the same time, explain in the "Oracle Compatibility" section of the adaptation document that the extension runs through the whitelist mechanism.
+
+==== Documentation Writing
+
+IvorySQL documentation is written using AsciiDoc, which has syntax similar to Markdown but more powerful. If you are not familiar with AsciiDoc syntax, please refer to xref:master/contribution/asciidoc_syntax_reference.adoc[AsciiDoc Syntax Quick Reference].
+
+===== Documentation Structure
+
+Each ecosystem component adaptation document should contain the following sections (which can be adjusted appropriately according to component characteristics):
+
+[cols="1,3"]
+|===
+|Section |Description
+
+|Overview
+|Introduce the component's functions, applicable scenarios, and relationship with IvorySQL
+
+|Principle Introduction
+|(Optional) Introduce the component's core working principles to help readers understand the component's operating mechanism
+
+|Installation
+|Detailed installation steps, including dependency installation, source code acquisition, compilation and installation, extension creation, etc.
+
+|Configuration
+|If the component requires additional configuration steps (such as modifying `ivorysql.conf`, restarting services, etc.), explain here
+
+|Usage
+|Usage examples of core functions, including creating objects, executing operations, querying results, etc.
+
+|Oracle Compatibility
+|The component's performance in Oracle compatibility mode, including supported functions and known limitations
+|===
+
+===== Documentation Template
+
+The following is a basic template for an ecosystem component adaptation document. Contributors can fill in content based on this:
+
+[source,asciidoc]
+------
+:sectnums:
+:sectnumlevels: 5
+
+= <Component Name>
+
+== Overview
+<Component function introduction, applicable scenarios, and relationship with IvorySQL>
+
+Project address: <https://github.com/xxx/xxx>
+
+Version: <adapted component version number>
+
+Open source license: <component's open source license>
+
+== Installation
+
+[TIP]
+The source code test installation environment is <operating system version>, with IvorySQL 5 or above installed in the environment, installation path is /usr/local/ivorysql/ivorysql-5
+
+=== Dependencies
+<List and explain the dependencies required for installation>
+
+=== Source Code Installation
+[literal]
+----
+# Get source code
+git clone <repository address>
+cd <directory>
+
+# Set pg_config path
+export PG_CONFIG=/usr/local/ivorysql/ivorysql-5/bin/pg_config
+
+# Compile and install
+make
+sudo make install
+----
+
+=== Create Extension
+[literal]
+----
+ivorysql=# CREATE EXTENSION <extension name>;
+CREATE EXTENSION
+
+ivorysql=# SELECT * FROM pg_available_extensions WHERE name = '<extension name>';
+----
+
+== Usage
+
+=== <Function Point One>
+<Usage example and output>
+
+=== <Function Point Two>
+<Usage example and output>
+
+== Oracle Compatibility
+<Optional: Test results in Oracle compatibility mode>
+------
+
+===== Synchronously Update Overview Page
+
+After completing the component documentation writing, please make sure to synchronously update the plugin list table in xref:master/ecosystem_components/ecosystem_overview.adoc[ecosystem_overview.adoc], adding a new record at the end of the table, containing the following information:
+
+* Sequence number: Current maximum sequence number plus 1
+* Plugin name: Plugin name with xref link
+* Version: The component version you adapted
+* Function description: Summarize the component function in one sentence
+* Applicable scenarios: List main applicable scenarios
+
+[NOTE]
+Both Chinese and English versions of the overview page need to be synchronously updated.
+
+==== Submit PR
+
+===== Create Branch
+
+Ecosystem component adaptation documents are uniformly submitted to the https://github.com/IvorySQL/ivorysql_docs[IvorySQL docs] repository (note: not the IvorySQL main repository where the Issue is created). Please first fork this repository and clone it to local, then create a feature branch:
+
+[literal]
+----
+git checkout -b feature/adapt-<component name>
+----
+
+===== Add Files
+
+. Place the documentation file in the `EN/modules/ROOT/pages/master/ecosystem_components/` directory
+. If there are image resources, place them in the `EN/modules/ROOT/images/` directory
+. Synchronously prepare the Chinese version and place it in the corresponding CN directory
+. Update the links in `nav.adoc` and `ecosystem_overview.adoc` for both CN and EN
+
+===== Create PR
+
+Create a PR according to the steps in the xref:#_submit_pr[Submit PR] section, and pay attention to the following special requirements:
+
+. Submit a PR to the master branch of the https://github.com/IvorySQL/ivorysql_docs[IvorySQL docs] repository
+. Use `Fixes IvorySQL/IvorySQL#<number>` in the PR description to link the adaptation Issue claimed or created in the first step
+. Explain in the PR description:
+* The adapted component name and version
+* Test environment information
+* Completed test items
+* Known limitations or issues
+
+[NOTE]
+====
+. Since the Issue is located in the IvorySQL main repository, you must use the full reference format `IvorySQL/IvorySQL#number`; after the PR is merged, the corresponding Issue will be automatically closed.
+. The linking keyword must be written in the PR description submitted to the IvorySQL docs repository and spelled correctly (`Fixes`/`Closes`/`Resolves` + space + `IvorySQL/IvorySQL#<number>`), writing it in comments is invalid.
+====
+
+===== Wait for Review
+
+Maintainers will reproduce the test according to the steps in the document and review the PR, possibly proposing the following modification suggestions:
+
+* Supplement missing test cases
+* Correct documentation formatting issues
+* Improve Oracle compatibility testing
+* Supplement Chinese version translation
+
+Please modify and update the PR in a timely manner according to the review opinions.
+
+=== Frequently Asked Questions
+
+==== Compilation Error: Cannot Find pg_config
+
+Please confirm that the `PG_CONFIG` environment variable is set correctly, pointing to the `bin/pg_config` under the IvorySQL installation directory. You can confirm through the following command:
+
+[literal]
+----
+$PG_CONFIG --version
+----
+
+==== Extension Creation Fails
+
+Please check:
+
+. Whether the extension's `.so` file is correctly installed in IvorySQL's `lib` directory
+. Whether the extension's `.sql` and `.control` files are correctly installed in the `share/extension` directory
+. Whether the IvorySQL version is compatible with the PostgreSQL version required by the component
+. If the failure reason is that PG-specific syntax cannot be parsed, you can refer to the PG syntax whitelist mechanism.
+
+==== Functional Abnormality in Oracle Compatibility Mode
+
+Some PostgreSQL extensions rely on the PG native parser and may not work properly in Oracle compatibility mode. When encountering such problems, please clearly explain the limitations in the "Oracle Compatibility" section of the documentation, and provide alternative solutions (if available).
+
+==== Unsure Whether the Component Is Suitable for Adaptation
+
+Please first initiate a discussion in https://github.com/IvorySQL/IvorySQL/issues[Issues], describing the component's functions and your adaptation plan. Maintainers will provide evaluation opinions.
+

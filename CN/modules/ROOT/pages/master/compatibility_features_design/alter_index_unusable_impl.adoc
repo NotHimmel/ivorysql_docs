@@ -1,0 +1,348 @@
+:sectnums:
+:sectnumlevels: 5
+
+= ALTER INDEX ... UNUSABLE 实现说明
+
+== 目的
+
+本文档详细说明 IvorySQL 中 `ALTER INDEX ... UNUSABLE` 功能的实现原理。该功能允许在 Oracle 兼容模式下手动禁用一个索引，使其不再被规划器选用、不再被 DML 维护，实现 Oracle 数据库 `ALTER INDEX` 语句的 `UNUSABLE` 子句。
+
+== 实现说明
+
+=== 系统分层架构
+
+`ALTER INDEX ... UNUSABLE` 的实现分为五个层次：
+
+```
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 1: Oracle 解析器  (ora_gram.y + ora_kwlist.h)                  │
+│  ─ 新增 UNUSABLE 关键字（UNRESERVED_KEYWORD, BARE_LABEL）             │
+│  ─ ALTER INDEX qualified_name UNUSABLE → OraAlterIndexUnusableStmt    │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 2: 语句分发  (tcop/utility.c)                                  │
+│  ─ T_OraAlterIndexUnusableStmt 与既有 T_OraAlterIndexRebuildStmt      │
+│    并列出现在 4 处：只读事务分类 / ProcessUtilitySlow /               │
+│    CreateCommandTag / GetCommandLogLevel                              │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 3: 执行层  (commands/indexcmds.c)                              │
+│  ─ ExecOraAlterIndexUnusable()：权限检查、解析锁定目标索引、          │
+│    拒绝分区索引、调用 index_set_unusable(indexOid, true)              │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 4: 目录层  (catalog/index.c + include/catalog/pg_index.h)      │
+│  ─ 新增 pg_index.indisunusable 列                                     │
+│  ─ index_set_unusable()：与 index_set_state_flags() 同构的独立        │
+│    catalog 更新函数                                                   │
+│  ─ index_create() 的 values[] 数组补充该列初始值（false）             │
+│  ─ reindex_index() 在既有"修复索引状态"分支中一并清除该标记           │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 5: 规划器 / 执行器  (plancat.c + BuildIndexInfo)               │
+│  ─ get_relation_info() 跳过 indisunusable 的索引                      │
+│  ─ BuildIndexInfo() 令 ii_ReadyForInserts 一并反映该标记，            │
+│    execIndexing.c 既有的跳过逻辑自然覆盖，无需改动执行器本身          │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+=== 语法与解析
+
+==== 关键字注册
+
+`src/include/oracle_parser/ora_kwlist.h`：
+
+[source,c]
+----
+PG_KEYWORD("until", UNTIL, UNRESERVED_KEYWORD, BARE_LABEL)
+PG_KEYWORD("unusable", UNUSABLE, UNRESERVED_KEYWORD, BARE_LABEL)
+PG_KEYWORD("update", UPDATE, UNRESERVED_KEYWORD, BARE_LABEL)
+----
+
+与 `REBUILD`/`ONLINE`/`TABLESPACE`/`PARALLEL` 同属非保留关键字，按字母序插入。`UNUSABLE` 同时加入 `%token` 列表、`unreserved_keyword` 与 `bare_label_keyword` 两处产生式，使其可作为裸标识符/列标签使用。
+
+==== 语法规则扩展
+
+`src/backend/oracle_parser/ora_gram.y` 中紧邻既有的 `REBUILD` 规则新增：
+
+[source,yacc]
+----
+| ALTER INDEX qualified_name REBUILD rebuild_index_opt_list
+        {
+            OraAlterIndexRebuildStmt *n = makeNode(OraAlterIndexRebuildStmt);
+            n->relation = $3;
+            n->options = $5;
+            $$ = (Node *) n;
+        }
+| ALTER INDEX qualified_name UNUSABLE
+        {
+            OraAlterIndexUnusableStmt *n = makeNode(OraAlterIndexUnusableStmt);
+            n->relation = $3;
+            $$ = (Node *) n;
+        }
+----
+
+与 REBUILD 不同，`UNUSABLE` 不带任何选项列表——Oracle 的 `UNUSABLE` 子句本身不接受参数。
+
+=== AST 节点设计
+
+`src/include/nodes/parsenodes.h` 中新增：
+
+[source,c]
+----
+/*
+ * Oracle-compatible ALTER INDEX ... UNUSABLE Statement
+ *
+ * 标记索引不可用：规划器跳过、DML 不再维护，直到通过 REBUILD（或
+ * 普通 REINDEX）重建后恢复。
+ */
+typedef struct OraAlterIndexUnusableStmt
+{
+    NodeTag     type;
+    RangeVar   *relation;      /* index to mark unusable */
+} OraAlterIndexUnusableStmt;
+----
+
+copy/equal/out/read 函数由 `gen_node_support.pl` 从该结构体自动生成，无需手动维护（与既有 `OraAlterIndexRebuildStmt` 相同的处理方式）。
+
+=== 目录层设计
+
+==== 为什么新增 `pg_index` 列，而非 reloption 或复用 `indisvalid`/`indisready`
+
+- **reloption 方案不可行**：PostgreSQL 的索引 reloption 按访问方法分别声明（btree/gin/hash 各自维护私有选项表），不存在通用的"索引级" reloption kind；绕开 AM 校验直接写 `pg_class.reloptions` 会导致 `pg_dump` 恢复时因未声明的 key 而报错。
+- **不能复用 `indisvalid`/`indisready`**：两者与 `CREATE/DROP INDEX CONCURRENTLY` 的多阶段状态机强耦合（`index_set_state_flags()` 对状态转换有严格 `Assert`），重载语义会破坏并发建索引的不变式。
+
+最终方案：新增独立的 `bool indisunusable` 列，`src/include/catalog/pg_index.h`：
+
+[source,c]
+----
+bool        indislive;         /* is this index alive at all? */
+bool        indisreplident;    /* is this index the identity for replication? */
+bool        indisunusable;     /* manually disabled via ALTER INDEX ...
+                                 * UNUSABLE (Oracle compat); skipped by the
+                                 * planner and unmaintained by DML until
+                                 * REBUILD */
+----
+
+对应 `catversion.h` 的 catalog 版本号升级。IvorySQL 此前已有直接扩展核心 catalog 的先例（`pg_class.relhasrowid` 用于 ROWID 特性、`pg_attribute.attisinvisible` 用于不可见列特性），本次沿用同样的模式。
+
+`indisunusable` 是瞬态索引*状态*而非定义性属性，与 `indisvalid`/`indisready` 同类，`pg_dump` 从不导出这类状态列，因此不需要像 `attisinvisible` 那样额外增加 `pg_dump` 支持代码。
+
+==== `index_set_unusable()`：独立的状态变更函数
+
+`src/backend/catalog/index.c`，紧邻既有的 `index_set_state_flags()`：
+
+[source,c]
+----
+/*
+ * index_set_unusable - set or clear pg_index.indisunusable
+ *
+ * Oracle-compatible companion to index_set_state_flags(): flips the
+ * "manually disabled via ALTER INDEX ... UNUSABLE" bit.  Unlike the
+ * indisvalid/indisready/indislive trio, this flag is not part of the
+ * CREATE/DROP INDEX CONCURRENTLY state machine, so no transition
+ * invariants need to be asserted here.
+ */
+void
+index_set_unusable(Oid indexId, bool unusable)
+{
+    Relation    pg_index;
+    HeapTuple   indexTuple;
+    Form_pg_index indexForm;
+
+    pg_index = table_open(IndexRelationId, RowExclusiveLock);
+
+    indexTuple = SearchSysCacheCopy1(INDEXRELID, ObjectIdGetDatum(indexId));
+    if (!HeapTupleIsValid(indexTuple))
+        elog(ERROR, "cache lookup failed for index %u", indexId);
+    indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+
+    if (indexForm->indisunusable != unusable)
+    {
+        indexForm->indisunusable = unusable;
+        CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
+    }
+
+    table_close(pg_index, RowExclusiveLock);
+}
+----
+
+`CatalogTupleUpdate()` 自带 cache invalidation，无需手动调用 `CacheInvalidateRelcache`。
+
+=== 执行层设计
+
+==== `ExecOraAlterIndexUnusable()`
+
+`src/backend/commands/indexcmds.c`，紧邻既有的 `ExecOraAlterIndexRebuild()`：
+
+[source,c]
+----
+void
+ExecOraAlterIndexUnusable(ParseState *pstate, const OraAlterIndexUnusableStmt *stmt)
+{
+    ReindexParams params = {0};
+    struct ReindexIndexCallbackState cbstate;
+    Oid         indexOid;
+    char        relkind;
+
+    if (ORA_PARSER != compatible_db)
+        ereport(ERROR,
+                (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                 errmsg("ALTER INDEX ... UNUSABLE is only available when compatible_db is oracle")));
+
+    /*
+     * 复用 ExecOraAlterIndexRebuild() 非 CONCURRENTLY 路径同样的解析/加锁
+     * 方式：索引本身 AccessExclusiveLock，堆表 ShareLock（由共享回调决定），
+     * 权限检查也由该回调完成。
+     */
+    cbstate.params = params;
+    cbstate.locked_table_oid = InvalidOid;
+
+    indexOid = RangeVarGetRelidExtended(stmt->relation,
+                                        AccessExclusiveLock,
+                                        0,
+                                        RangeVarCallbackForReindexIndex,
+                                        &cbstate);
+
+    relkind = get_rel_relkind(indexOid);
+    if (relkind == RELKIND_PARTITIONED_INDEX)
+        ereport(ERROR,
+                (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                 errmsg("ALTER INDEX ... UNUSABLE is not supported for partitioned indexes"),
+                 errhint("Mark each partition's leaf index unusable individually.")));
+
+    index_set_unusable(indexOid, true);
+}
+----
+
+`RangeVarCallbackForReindexIndex` 是既有 REINDEX/REBUILD 基础设施中的共享回调，直接复用意味着权限检查（`pg_class_aclcheck(..., ACL_MAINTAIN)`）、relkind 校验、堆表加锁顺序都与 REBUILD/REINDEX 完全一致，不需要重新实现。
+
+==== 规划器：跳过 unusable 索引
+
+`src/backend/optimizer/util/plancat.c`，`get_relation_info()`：
+
+[source,c]
+----
+if (!index->indisvalid)
+{
+    index_close(indexRelation, NoLock);
+    continue;
+}
+
+/*
+ * Ignore indexes manually disabled via the Oracle-compatible
+ * ALTER INDEX ... UNUSABLE.  This check is unconditional (not
+ * gated on the current session's compatible_db): indisunusable
+ * is a catalog fact about the index, not a per-session parser
+ * choice, and every session must honor it consistently to avoid
+ * planning against a stale/unmaintained index.
+ */
+if (index->indisunusable)
+{
+    index_close(indexRelation, NoLock);
+    continue;
+}
+----
+
+==== 执行器：跳过 unusable 索引的维护
+
+`src/backend/catalog/index.c`，`BuildIndexInfo()`：
+
+[source,c]
+----
+ii = makeIndexInfo(indexStruct->indnatts,
+                   indexStruct->indnkeyatts,
+                   index->rd_rel->relam,
+                   RelationGetIndexExpressions(index),
+                   RelationGetIndexPredicate(index),
+                   indexStruct->indisunique,
+                   indexStruct->indnullsnotdistinct,
+                   /*
+                    * A manually UNUSABLE index (Oracle compat) is treated
+                    * as not ready for inserts, so DML stops maintaining
+                    * it, same as an in-progress CREATE INDEX CONCURRENTLY.
+                    */
+                   indexStruct->indisready && !indexStruct->indisunusable,
+                   false,
+                   index->rd_indam->amsummarizing,
+                   indexStruct->indisexclusion && indexStruct->indisunique);
+----
+
+`ii_ReadyForInserts` 一旦为 false，`execIndexing.c` 里既有的 `if (!indexInfo->ii_ReadyForInserts) continue;` 逻辑自然跳过该索引的插入/更新维护，**执行器本身不需要任何改动**。这也是唯一/主键索引 UNUSABLE 后唯一性检查自动停止的原因——检查发生在索引自身的 `aminsert` 路径内部，不需要额外联动 `pg_constraint`。
+
+==== REBUILD / REINDEX 收尾：清除 UNUSABLE 标记
+
+`src/backend/catalog/index.c`，`reindex_index()` 中"发现索引状态需要修复"的既有分支：
+
+[source,c]
+----
+index_bad = (!indexForm->indisvalid ||
+             !indexForm->indisready ||
+             !indexForm->indislive ||
+             indexForm->indisunusable);
+if (index_bad ||
+    (indexForm->indcheckxmin && !indexInfo->ii_BrokenHotChain))
+{
+    ...
+    indexForm->indisvalid = true;
+    indexForm->indisready = true;
+    indexForm->indislive = true;
+    /* a completed non-concurrent rebuild always clears UNUSABLE */
+    indexForm->indisunusable = false;
+    CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
+}
+----
+
+这个分支覆盖：普通 `REINDEX INDEX`、`ALTER INDEX ... REBUILD`（非 `ONLINE`）、`REBUILD PARTITION`（非 `ONLINE`）。`REBUILD ONLINE`（并发路径，走 `ReindexRelationConcurrently()`，从不调用 `reindex_index()`）**不会**清除该标记，见"已知限制"。
+
+=== 与 PG_PARSER 隔离策略
+
+按项目惯例（`if (ORA_PARSER == compatible_db) { ... }`），本功能在两个层面隔离：
+
+1. **语法层天然隔离**：`UNUSABLE` 语法只存在于 `ora_gram.y`，`PG_PARSER` 会话完全没有语法入口。
+2. **命令入口纵深防御**：`ExecOraAlterIndexUnusable()` 额外用 `if (ORA_PARSER != compatible_db) ereport(ERROR, ...)` 兜底。
+
+=== 错误处理
+
+==== 分区索引拒绝
+
+[source,sql]
+----
+ALTER INDEX idx_sales_id UNUSABLE;  -- idx_sales_id 是分区父索引
+-- ERROR: ALTER INDEX ... UNUSABLE is not supported for partitioned indexes
+-- HINT: Mark each partition's leaf index unusable individually.
+----
+错误由 `ExecOraAlterIndexUnusable()` 中 `relkind == RELKIND_PARTITIONED_INDEX` 分支主动抛出。
+
+==== PG_PARSER 模式拒绝
+
+[source,sql]
+----
+SET compatible_db = PG_PARSER;
+ALTER INDEX idx_emp_email UNUSABLE;
+-- ERROR: syntax error at or near "UNUSABLE"
+----
+语法层面在 `PG_PARSER` 下天然不存在该产生式，无需运行时判断即报错。
+
+==== 重复维护重建失败（唯一性冲突）
+
+[source,sql]
+----
+ALTER INDEX idx_emp_email UNUSABLE;
+INSERT INTO emp VALUES (999, 'a@example.com');  -- 与已有行重复，成功
+ALTER INDEX idx_emp_email REBUILD;
+-- ERROR: could not create unique index "idx_emp_email"
+-- DETAIL: Key (email)=(a@example.com) is duplicated.
+----
+错误来自 `reindex_index()` 内部 `index_build()` 的标准唯一性校验，非本功能新增逻辑，属于自然继承的行为。
+
+=== 已知限制
+
+1. **不支持 `USABLE` 子句**：与 Oracle 行为一致，REBUILD 是唯一恢复路径；
+2. **`REBUILD ONLINE` 不清除 UNUSABLE**：并发重建路径的多事务快照生命周期与在其后追加一次独立目录更新不兼容；
+3. **只有根/父分区索引本身不支持**：`RELKIND_PARTITIONED_INDEX` 上执行会报错；每个分区自己的叶子物理索引不受限制；
+4. **`SKIP_UNUSABLE_INDEXES` 会话参数**：Oracle 允许通过该参数控制查询遇到 unusable 唯一索引时是否报错，不支持；

@@ -1,0 +1,275 @@
+:sectnums:
+:sectnumlevels: 5
+
+= ALTER INDEX ... UNUSABLE
+
+== Purpose
+
+This document explains the purpose of `ALTER INDEX ... UNUSABLE` in IvorySQL, which implements Oracle-style manual index disabling.
+
+`UNUSABLE` is a clause of the Oracle database `ALTER INDEX` statement used to mark an index as unusable: the index object remains in the data dictionary, but stops participating in query optimization and DML maintenance. A typical use case is disabling index maintenance before a bulk data load to improve write performance, then rebuilding the index with `ALTER INDEX ... REBUILD` once the load is complete.
+
+== Feature Description
+
+=== Basic Syntax
+
+Under Oracle compatibility mode (`compatible_db = ORA_PARSER`), `ALTER INDEX` supports the following extended syntax:
+
+[source,sql]
+----
+ALTER INDEX index_name UNUSABLE;
+----
+
+Real Oracle **has no `ALTER INDEX ... USABLE` clause** — the only documented way to restore usability is `ALTER INDEX ... REBUILD` (already supported by IvorySQL; see the separate document). IvorySQL follows this behavior and does not provide a `USABLE` clause.
+
+=== Core Characteristics
+
+- **Excluded by the planner**: An index marked UNUSABLE is no longer chosen by the planner as an access path — even with `SET enable_seqscan = off` explicitly set, it is completely excluded rather than merely deprioritized
+- **DML maintenance stops**: INSERT/UPDATE no longer update the index's physical structure
+- **Uniqueness checking stops accordingly**: If the index is a unique or primary key index, since the uniqueness check happens within the index's own insert path, duplicate values can be silently inserted once maintenance stops (consistent with Oracle's behavior)
+- **Index definition and data are not dropped**: The index object, its definition, and its existing physical pages are all retained; they are simply no longer read or written
+- **Only REBUILD restores it**: `ALTER INDEX ... REBUILD` (non-`ONLINE`) or a plain `REINDEX INDEX` physically rebuilds the index and automatically clears the UNUSABLE flag, restoring both planner visibility and DML maintenance
+- **Partitioned indexes are not supported**: Running `UNUSABLE` against a `RELKIND_PARTITIONED_INDEX` raises an error; each leaf partition index must be operated on individually
+
+== Syntax Examples
+
+=== Basic Usage
+
+[source,sql]
+----
+CREATE TABLE emp (id int PRIMARY KEY, email text);
+CREATE UNIQUE INDEX idx_emp_email ON emp(email);
+
+ALTER INDEX idx_emp_email UNUSABLE;
+-- Afterward: queries no longer use this index; INSERTing a duplicate email no longer raises an error
+----
+
+=== Bulk Load Workflow
+
+[source,sql]
+----
+-- Disable index maintenance before loading
+ALTER INDEX idx_emp_email UNUSABLE;
+
+-- Bulk load data (skips index maintenance overhead)
+INSERT INTO emp SELECT * FROM staging_emp;
+
+-- Rebuild the index after loading to restore usability
+ALTER INDEX idx_emp_email REBUILD;
+----
+
+=== Planner Exclusion Effect
+
+[source,sql]
+----
+SET enable_seqscan = off;
+EXPLAIN (COSTS OFF) SELECT * FROM emp WHERE email = 'a@example.com';
+--                      QUERY PLAN
+-- ------------------------------------------------------
+--  Index Only Scan using idx_emp_email on emp
+--    Index Cond: (email = 'a@example.com'::text)
+
+ALTER INDEX idx_emp_email UNUSABLE;
+
+EXPLAIN (COSTS OFF) SELECT * FROM emp WHERE email = 'a@example.com';
+--            QUERY PLAN
+-- ----------------------------------
+--  Seq Scan on emp
+--    Disabled: true
+--    Filter: (email = 'a@example.com'::text)
+-- Even though Seq Scan itself is disabled via enable_seqscan=off, the planner has no other path available
+RESET enable_seqscan;
+----
+
+=== Uniqueness Checking Stops
+
+[source,sql]
+----
+ALTER INDEX idx_emp_email UNUSABLE;
+INSERT INTO emp VALUES (999, 'a@example.com');  -- duplicates an existing row
+-- Succeeds, no ERROR (maintenance has stopped, no conflict is detected)
+----
+
+=== REBUILD Restores Usability
+
+[source,sql]
+----
+-- If data violating uniqueness was inserted while UNUSABLE, REBUILD will fail
+ALTER INDEX idx_emp_email REBUILD;
+-- ERROR: could not create unique index "idx_emp_email"
+-- DETAIL: Key (email)=(a@example.com) is duplicated.
+
+-- After cleaning up the duplicate data, the rebuild succeeds
+DELETE FROM emp WHERE id = 999;
+ALTER INDEX idx_emp_email REBUILD;
+-- Afterward: the index is usable again and uniqueness is enforced again
+----
+
+=== A Plain REINDEX Also Restores Usability
+
+[source,sql]
+----
+ALTER INDEX idx_emp_email UNUSABLE;
+REINDEX INDEX idx_emp_email;
+-- No need for Oracle-specific syntax; a plain REINDEX also clears the UNUSABLE flag
+----
+
+=== CLUSTER / REPLICA IDENTITY Refuse to Use an Unusable Index
+
+An index whose maintenance has stopped may be missing rows changed while it was disabled, so it can no longer be trusted as a basis for cluster ordering or as the replica identity index:
+
+[source,sql]
+----
+ALTER TABLE emp CLUSTER ON idx_emp_email;
+ALTER INDEX idx_emp_email UNUSABLE;
+
+CLUSTER emp;
+-- ERROR: cannot cluster on unusable index "idx_emp_email"
+
+ALTER INDEX idx_emp_email REBUILD;
+CLUSTER emp;  -- usable again after rebuilding
+----
+
+Likewise, if an index has been designated as the replica identity index via `ALTER TABLE ... REPLICA IDENTITY USING INDEX`, logical replication skips that index while it is marked UNUSABLE (the old-row image no longer includes the old primary/unique key values, rather than supplying stale or incorrect ones), and normal behavior resumes automatically after REBUILD.
+
+== Error Handling
+
+=== Only the Parent Partitioned Index Itself Is Unsupported — Leaf Partition Indexes Work as Usual
+
+[source,sql]
+----
+CREATE TABLE sales (id int, region text) PARTITION BY RANGE (id);
+CREATE TABLE sales_p1 PARTITION OF sales FOR VALUES FROM (1) TO (1001);
+CREATE INDEX idx_sales_id ON sales(id);  -- automatically creates and attaches a leaf index on sales_p1
+
+-- Operating on the parent index itself raises an error:
+ALTER INDEX idx_sales_id UNUSABLE;
+-- ERROR: ALTER INDEX ... UNUSABLE is not supported for partitioned indexes
+-- HINT: Mark each partition's leaf index unusable individually.
+
+-- But operating on a leaf index individually is supported by design and works normally:
+ALTER INDEX sales_p1_id_idx UNUSABLE;
+ALTER INDEX sales_p1_id_idx REBUILD;
+----
+
+NOTE: Only the root/parent index with `relkind = RELKIND_PARTITIONED_INDEX` is rejected; each partition's own leaf physical index (`relkind = RELKIND_INDEX`) is entirely unaffected by this restriction — disabling/rebuilding per partition is exactly the usage recommended by the official error hint.
+
+=== Index Does Not Exist
+
+[source,sql]
+----
+ALTER INDEX no_such_index UNUSABLE;
+-- ERROR: relation "no_such_index" does not exist
+----
+
+=== Target Is Not an Index
+
+[source,sql]
+----
+ALTER INDEX emp UNUSABLE;  -- emp is a table name, not an index name
+-- ERROR: "emp" is not an index
+----
+
+=== Using It Under PG_PARSER Mode
+
+[source,sql]
+----
+SET compatible_db = PG_PARSER;
+ALTER INDEX idx_emp_email UNUSABLE;
+-- ERROR: syntax error at or near "UNUSABLE"
+----
+
+=== CLUSTER Refuses to Use an Unusable Cluster Index
+
+[source,sql]
+----
+ALTER TABLE emp CLUSTER ON idx_emp_email;
+ALTER INDEX idx_emp_email UNUSABLE;
+CLUSTER emp;
+-- ERROR: cannot cluster on unusable index "idx_emp_email"
+----
+
+=== TOAST Table Indexes Do Not Allow UNUSABLE
+
+A table's TOAST index is used to locate the storage position of oversized field values; disabling it would make newly inserted large field values unretrievable, with no warning at all. It is therefore disallowed outright:
+
+[source,sql]
+----
+ALTER INDEX pg_toast.pg_toast_16537_index UNUSABLE;
+-- ERROR: ALTER INDEX ... UNUSABLE is not supported for TOAST table indexes
+----
+
+=== ON CONFLICT Raises an Error on an Unusable Unique Index, Instead of Crashing Internally
+
+[source,sql]
+----
+CREATE TABLE t (id int UNIQUE, val text);
+INSERT INTO t VALUES (1, 'a');
+ALTER INDEX t_id_key UNUSABLE;
+
+INSERT INTO t VALUES (1, 'b') ON CONFLICT (id) DO UPDATE SET val = excluded.val;
+-- ERROR: there is no unique or exclusion constraint matching the ON CONFLICT specification
+
+ALTER INDEX t_id_key REBUILD;
+INSERT INTO t VALUES (1, 'c') ON CONFLICT (id) DO UPDATE SET val = excluded.val;
+-- Back to normal
+----
+
+=== A New Foreign Key Cannot Bind to an Unusable Referenced Key
+
+[source,sql]
+----
+CREATE TABLE parent (id int PRIMARY KEY, val text);
+ALTER INDEX parent_pkey UNUSABLE;
+
+CREATE TABLE child (id int REFERENCES parent);
+-- ERROR: cannot use an unusable primary key for referenced table "parent"
+
+ALTER INDEX parent_pkey REBUILD;
+CREATE TABLE child (id int REFERENCES parent);  -- back to normal
+----
+
+Explicitly specifying the referenced column (which goes through named unique constraint matching rather than primary key lookup) is likewise rejected:
+
+[source,sql]
+----
+CREATE TABLE parent2 (id int, email text UNIQUE);
+ALTER INDEX parent2_email_key UNUSABLE;
+
+CREATE TABLE child2 (email text REFERENCES parent2(email));
+-- ERROR: there is no unique constraint matching given keys for referenced table "parent2"
+----
+
+=== USING INDEX Constraint Creation Refuses an Unusable Index
+
+[source,sql]
+----
+CREATE TABLE t2 (id int, val text);
+CREATE UNIQUE INDEX idx_t2_val ON t2(val);
+ALTER INDEX idx_t2_val UNUSABLE;
+
+ALTER TABLE t2 ADD CONSTRAINT uq_val UNIQUE USING INDEX idx_t2_val;
+-- ERROR: index "idx_t2_val" is unusable
+----
+
+=== amcheck Refuses to Check an Unusable Index (Avoiding False-Positive Reports)
+
+[source,sql]
+----
+CREATE TABLE t3 (id int PRIMARY KEY, val text);
+ALTER INDEX t3_pkey UNUSABLE;
+
+SELECT bt_index_check('t3_pkey');
+-- ERROR: cannot check index "t3_pkey"
+-- DETAIL: Index is unusable.
+----
+
+== Cleanup
+
+[source,sql]
+----
+-- Restore the index to a usable state:
+ALTER INDEX idx_emp_email REBUILD;
+-- Or:
+REINDEX INDEX idx_emp_email;
+----

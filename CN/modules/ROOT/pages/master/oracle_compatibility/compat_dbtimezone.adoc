@@ -1,0 +1,145 @@
+:sectnums:
+:sectnumlevels: 5
+
+= DBTIMEZONE
+
+== 目的
+
+本文档解释 IvorySQL 中 `DBTIMEZONE` 函数的用途，实现 Oracle 风格的数据库级时区查询功能。
+
+Oracle 提供两个时区相关的内置函数：`SESSIONTIMEZONE` 返回当前会话的时区（随 `ALTER SESSION SET TIME_ZONE` 改变），`DBTIMEZONE` 返回数据库级别固定的时区（在 `CREATE DATABASE` / `ALTER DATABASE SET TIME_ZONE` 时确定，不随会话变化）。IvorySQL 已实现 `SESSIONTIMEZONE`，本功能补齐 `DBTIMEZONE`。
+
+== 功能说明
+
+=== 基本语法
+
+[source,sql]
+----
+SELECT dbtimezone() FROM dual;
+----
+
+返回一个 `text` 类型的时区值，格式为 UTC 偏移（`[+-]HH:MI`），默认值为 `'+00:00'`。
+
+=== 核心特性
+
+- **数据库级、非会话级**：返回值由 `ALTER DATABASE ... SET ivorysql.dbtimezone = ...` 固定，不受当前会话 `SET timezone` 影响，与 `SESSIONTIMEZONE`（会话级）形成对照
+- **仅能通过 `ALTER DATABASE ... SET` 修改**：会话内直接 `SET ivorysql.dbtimezone = ...`、以及任何形式的 `ALTER ROLE ... SET ivorysql.dbtimezone = ...`（`ALTER ROLE rolename SET`、`ALTER ROLE rolename IN DATABASE dbname SET`、`ALTER ROLE ALL SET`）都会在命令层直接报错，不会被静默接受；只有 `ALTER DATABASE dbname SET ivorysql.dbtimezone = ...` 才会在下次连接该库时生效
+- **默认仅超级用户可设置**：普通用户即使是自己创建/拥有的数据库的 owner，也无权执行 `ALTER DATABASE ... SET ivorysql.dbtimezone = ...`；超级用户可以通过 `GRANT SET ON PARAMETER ivorysql.dbtimezone TO <role>;` 显式授权某个非超级用户角色管理该设置
+- **同一数据库下所有角色看到同一个值**：`DBTIMEZONE` 是纯数据库属性，不支持"同一数据库、不同角色看到不同值"这种用法——任何试图按角色区分的 `ALTER ROLE ... SET` 都会在命令层直接被拒绝（`ALTER ROLE ... RESET` 除外，用于清理历史遗留的记录）
+- **值格式校验**：接受 `[+-]HH:MI` 形式的 UTC 偏移，范围 `-12:59` ~ `+14:00`（与 Oracle 一致），或合法的 IANA 时区区域名
+
+== 语法示例
+
+=== 基本用法
+
+[source,sql]
+----
+SELECT dbtimezone() FROM dual;
+--  dbtimezone
+-- ------------
+--  +00:00
+-- (1 row)
+----
+
+=== 与 SESSIONTIMEZONE 对比：不受会话时区影响
+
+[source,sql]
+----
+SET timezone = 'Asia/Hong_Kong';
+SELECT sessiontimezone() FROM dual;
+--  sessiontimezone
+-- -----------------
+--  Asia/Hong_Kong
+
+SELECT dbtimezone() FROM dual;
+-- 仍为数据库固定值，不受上面 SET timezone 影响
+--  dbtimezone
+-- ------------
+--  +00:00
+----
+
+=== 通过 ALTER DATABASE 固定某个数据库的时区
+
+[source,sql]
+----
+ALTER DATABASE mydb SET ivorysql.dbtimezone = '+08:00';
+-- 需要断开重连（新会话）后才生效
+\c mydb
+SELECT dbtimezone() FROM dual;   -- +08:00
+----
+
+=== 授权非超级用户管理自己数据库的 DBTIMEZONE
+
+[source,sql]
+----
+-- 超级用户执行一次性授权：
+GRANT SET ON PARAMETER ivorysql.dbtimezone TO app_owner;
+
+-- app_owner 之后可以为自己拥有的数据库设置：
+\c app_db app_owner
+ALTER DATABASE app_db SET ivorysql.dbtimezone = '+05:30';
+\c app_db app_owner
+SELECT dbtimezone() FROM dual;   -- +05:30
+----
+
+== 错误处理
+
+=== 会话内直接 SET 被拒绝
+
+[source,sql]
+----
+SET ivorysql.dbtimezone = '+08:00';
+-- ERROR:  parameter "ivorysql.dbtimezone" cannot be set
+-- DETAIL:  "ivorysql.dbtimezone" can only be set with ALTER DATABASE ... SET, not within a session or per-role.
+----
+
+=== ALTER ROLE ... SET 在命令层直接被拒绝
+
+[source,sql]
+----
+ALTER ROLE myrole IN DATABASE mydb SET ivorysql.dbtimezone = '+09:00';
+-- ERROR:  parameter "ivorysql.dbtimezone" cannot be set
+-- DETAIL:  "ivorysql.dbtimezone" can only be set with ALTER DATABASE ... SET, not within a session or per-role.
+-- HINT:    Use ALTER DATABASE ... SET ivorysql.dbtimezone instead, or ALTER ROLE ... RESET ivorysql.dbtimezone to remove a stale per-role override.
+
+ALTER ROLE myrole SET ivorysql.dbtimezone = '+09:00';           -- 同样报错
+ALTER ROLE ALL SET ivorysql.dbtimezone = '+09:00';              -- 同样报错
+
+-- RESET / RESET ALL 不受影响，仍可用于清理历史遗留的记录：
+ALTER ROLE myrole IN DATABASE mydb RESET ivorysql.dbtimezone;  -- OK
+----
+
+=== 非法值 / 超出范围偏移
+
+[source,sql]
+----
+ALTER DATABASE mydb SET ivorysql.dbtimezone = 'not_a_zone';
+-- ERROR:  invalid value for parameter "ivorysql.dbtimezone": "not_a_zone"
+-- DETAIL:  "not_a_zone" is not a valid UTC offset (+/-HH:MI) or time zone name.
+
+ALTER DATABASE mydb SET ivorysql.dbtimezone = '+15:00';
+-- ERROR:  invalid value for parameter "ivorysql.dbtimezone": "+15:00"
+-- DETAIL:  time zone offset "+15:00" is out of range for DBTIMEZONE (-12:59 to +14:00)
+----
+
+=== 未被授权的普通用户执行 ALTER DATABASE
+
+[source,sql]
+----
+-- normal_user 是 mydb 的 owner，但没有被 GRANT SET ON PARAMETER 授权
+\c mydb normal_user
+ALTER DATABASE mydb SET ivorysql.dbtimezone = '+08:00';
+-- ERROR:  permission denied to set parameter "ivorysql.dbtimezone"
+----
+
+NOTE: 拥有/创建了一个数据库不代表对这个数据库能设置的每个 GUC 参数都有权限——数据库级权限（是否能 `ALTER` 这个库）与 GUC 参数级权限（是否能"设置"这个参数）是两层独立的检查。
+
+== 清理
+
+[source,sql]
+----
+-- 恢复默认值：
+ALTER DATABASE mydb SET ivorysql.dbtimezone = '+00:00';
+-- 或者完全移除该数据库的自定义设置，回落到集群默认值：
+ALTER DATABASE mydb RESET ivorysql.dbtimezone;
+----

@@ -1,0 +1,316 @@
+:sectnums:
+:sectnumlevels: 5
+
+= DBTIMEZONE Implementation Notes
+
+== Purpose
+
+This document describes in detail the implementation principles behind the `DBTIMEZONE` function feature in IvorySQL. This feature provides a database-level, non-session-level fixed time zone value, persisted through PostgreSQL's native `ALTER DATABASE ... SET` mechanism, implementing the semantics of Oracle's `DBTIMEZONE` function.
+
+== Implementation Notes
+
+=== System Layering Architecture
+
+The implementation of `DBTIMEZONE` is divided into four layers, all located under `contrib/ivorysql_ora`:
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│  Layer 1: GUC Definition & Permission Layer                   │
+│  (src/guc/guc.c + src/include/guc.h)                          │
+│  ─ Adds the custom GUC ivorysql.dbtimezone (PGC_SUSET)         │
+│  ─ check_dbtimezone(): rejects in-session SET/ALTER ROLE based │
+│    on GucSource, allowing only ALTER DATABASE ... SET; also    │
+│    validates the offset/region-name format                    │
+└───────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────┐
+│  Layer 2: Command-Level Interception (src/ivorysql_ora.c)      │
+│  ─ ivorysql_ora_ProcessUtility() (an existing                  │
+│    ProcessUtility_hook) adds                                   │
+│    reject_alter_role_dbtimezone(): intercepts                  │
+│    ALTER ROLE ... SET / ALTER ROLE ALL SET directly at the     │
+│    parse-tree level, ahead of the Layer 1 check hook, so the   │
+│    command itself errors out immediately with no catalog       │
+│    residue left behind                                         │
+└───────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────┐
+│  Layer 3: C Function Layer                                    │
+│  (src/builtin_functions/datetime_datatype_functions.c)         │
+│  ─ ora_dbtimezone(): reads the ivorysql_dbtimezone variable     │
+│    and returns it as text; placed right next to the existing   │
+│    ora_sessiontimezone() (which reads session_timezone) —      │
+│    same implementation style, deliberately distinct semantics  │
+└───────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────┐
+│  Layer 4: SQL Catalog Layer                                    │
+│  (src/builtin_functions/builtin_functions--1.0.sql)             │
+│  ─ CREATE FUNCTION sys.dbtimezone() ... STABLE                 │
+│    placed right next to the existing sys.sessiontimezone()     │
+└───────────────────────────────────────────────────────────────┘
+```
+
+This feature adds no new syntax (no changes are needed at the Oracle parser/AST/catalog-column level) — `dbtimezone()` is an ordinary `STABLE` SQL function paired with a custom GUC, implemented by reusing PostgreSQL's existing per-database configuration mechanism.
+
+=== Design Approach: Adding a New GUC
+
+A GUC itself is not "storage dedicated to per-database values" — rather, it reuses the generic `ALTER DATABASE/ROLE ... SET` mechanism that PostgreSQL supports for any GUC (persisted in the `pg_db_role_setting` system catalog). No dedicated catalog column was designed for `DBTIMEZONE`.
+
+=== GUC Definition and Permission Model
+
+==== Naming Convention
+
+The GUC is named `ivorysql.dbtimezone`, consistent with the project's existing custom-GUC naming convention. The corresponding C-side variable is `ivorysql_dbtimezone`.
+
+==== Permission Model: Settable Only via ALTER DATABASE
+
+`ALTER DATABASE dbname SET <guc> = value` actually involves two independent permission checks: permission on the database object itself (whether you're allowed to `ALTER` this database — being the owner or a superuser suffices), and permission on the GUC parameter itself (whether "setting" this parameter is allowed, independent of whether you own the database). The `context` of `ivorysql.dbtimezone` is set to `PGC_SUSET`, so by default only superusers pass the second check; to delegate this to an ordinary role, a superuser must additionally run `GRANT SET ON PARAMETER ivorysql.dbtimezone TO <role>;` (corresponding to the `pg_parameter_acl` catalog introduced in PostgreSQL 15+).
+
+Setting `context = PGC_SUSET` alone is not enough to distinguish "in-session `SET`" from "`ALTER DATABASE ... SET`" — both internally call `set_config_option()` under the same `PGC_SUSET` identity. What actually distinguishes the call origin is the `GucSource source` parameter received by the check hook:
+
+[cols="2,3,1"]
+|===
+| `GucSource` | Triggering Scenario | Allowed?
+
+| `PGC_S_SESSION`
+| In-session `SET ivorysql.dbtimezone = ...;`
+| Rejected
+
+| `PGC_S_USER`
+| `ALTER ROLE rolename SET ...` (not scoped to a database)
+| Rejected
+
+| `PGC_S_DATABASE_USER`
+| `ALTER ROLE rolename IN DATABASE dbname SET ...`
+| Rejected
+
+| `PGC_S_CLIENT`
+| Client connection options (e.g. `PGOPTIONS`)
+| Rejected
+
+| `PGC_S_GLOBAL`
+| `ALTER ROLE ALL SET ...` (global default)
+| Rejected
+
+| `PGC_S_DATABASE`
+| `ALTER DATABASE dbname SET ...` taking effect at connection establishment
+| Allowed
+
+| `PGC_S_TEST`
+| The validation phase while executing the `ALTER DATABASE ... SET` command itself
+| Allowed (otherwise the command itself could never execute)
+
+| `PGC_S_DEFAULT` / `PGC_S_DYNAMIC_DEFAULT` / `PGC_S_FILE` / `PGC_S_ARGV` / `PGC_S_ENV_VAR`
+| Startup default value, `postgresql.conf`, `postmaster` command-line/environment variables
+| Allowed (to guarantee cluster startup is unaffected)
+
+| `PGC_S_OVERRIDE`
+| Replaying an already-validated value (e.g. parallel worker synchronization)
+| Allowed (otherwise parallel queries would error out)
+|===
+
+==== `check_dbtimezone()` Implementation
+
+`contrib/ivorysql_ora/src/guc/guc.c`:
+
+[source,c]
+----
+/* Backing variable for ivorysql.dbtimezone, read by dbtimezone(). */
+char       *ivorysql_dbtimezone = NULL;
+
+static bool
+check_dbtimezone(char **newval, void **extra, GucSource source)
+{
+    char       *str = *newval;
+
+    if (source == PGC_S_SESSION ||
+        source == PGC_S_USER ||
+        source == PGC_S_DATABASE_USER ||
+        source == PGC_S_CLIENT ||
+        source == PGC_S_GLOBAL)
+    {
+        GUC_check_errcode(ERRCODE_CANT_CHANGE_RUNTIME_PARAM);
+        GUC_check_errmsg("parameter \"ivorysql.dbtimezone\" cannot be set");
+        GUC_check_errdetail("\"ivorysql.dbtimezone\" can only be set with "
+                             "ALTER DATABASE ... SET, not within a session "
+                             "or per-role.");
+        return false;
+    }
+
+    /* Validate [+-]HH:MI format, range -12:59 to +14:00 (consistent with Oracle) */
+    if (strlen(str) == 6 && ... )
+    {
+        ...
+    }
+
+    /* Otherwise it must be a valid time zone region name (reuses pg_tzset() validation) */
+    if (!pg_tzset(str))
+    {
+        GUC_check_errdetail("\"%s\" is not a valid UTC offset (+/-HH:MI) "
+                             "or time zone name.", str);
+        return false;
+    }
+
+    return true;
+}
+
+void
+IvorysqlOraDefineGucs(void)
+{
+    DefineCustomStringVariable("ivorysql.dbtimezone",
+                                "Sets the database time zone reported by dbtimezone().",
+                                "Can only be set with ALTER DATABASE ... SET, not with a "
+                                "plain SET or ALTER ROLE ... SET. Requires superuser, or a "
+                                "role granted permission via "
+                                "GRANT SET ON PARAMETER ivorysql.dbtimezone TO <role>.",
+                                &ivorysql_dbtimezone,
+                                "+00:00",
+                                PGC_SUSET,
+                                0,
+                                check_dbtimezone,
+                                NULL,
+                                NULL);
+}
+----
+
+`GUC_check_errcode(ERRCODE_CANT_CHANGE_RUNTIME_PARAM)` combined with `GUC_check_errmsg(...)` changes the error raised when an in-session `SET` is rejected to `parameter "ivorysql.dbtimezone" cannot be set`, rather than the generic `invalid value for parameter ...: "..."` — the reason for this kind of rejection is "this parameter cannot be set this way," not "this value is invalid," so a dedicated errcode/errmsg expresses the semantics more accurately; failures in the format/range validation (using `GUC_check_errdetail` but not setting `GUC_check_errmsg`) still fall through to the default `invalid value for parameter` message.
+
+=== Command-Level Interception: `ALTER ROLE ... SET`
+
+`contrib/ivorysql_ora/src/ivorysql_ora.c` already has a `ProcessUtility_hook`, into which the following is added:
+
+[source,c]
+----
+static void
+reject_alter_role_dbtimezone(Node *parsetree)
+{
+    AlterRoleSetStmt *stmt;
+    VariableSetStmt *setstmt;
+
+    if (nodeTag(parsetree) != T_AlterRoleSetStmt)
+        return;
+
+    stmt = (AlterRoleSetStmt *) parsetree;
+    setstmt = stmt->setstmt;
+
+    if (setstmt == NULL || setstmt->name == NULL)
+        return;                 /* RESET ALL, or malformed */
+
+    if (setstmt->kind == VAR_RESET || setstmt->kind == VAR_RESET_ALL)
+        return;                 /* clearing an override is always fine */
+
+    if (pg_strcasecmp(setstmt->name, "ivorysql.dbtimezone") == 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_CANT_CHANGE_RUNTIME_PARAM),
+                 errmsg("parameter \"ivorysql.dbtimezone\" cannot be set"),
+                 errdetail("\"ivorysql.dbtimezone\" can only be set with "
+                           "ALTER DATABASE ... SET, not within a session "
+                           "or per-role."),
+                 errhint("Use ALTER DATABASE ... SET ivorysql.dbtimezone "
+                         "instead, or ALTER ROLE ... RESET "
+                         "ivorysql.dbtimezone to remove a stale per-role "
+                         "override.")));
+}
+----
+
+This check is inserted into `ivorysql_ora_ProcessUtility()` before calling `standard_ProcessUtility()` (or the previously installed hook) — as soon as the command matches, it directly calls `ereport(ERROR, ...)`, so `ALTER ROLE` never reaches the point of writing to the catalog.
+
+=== SQL Function Layer
+
+==== The `ora_dbtimezone()` C Function
+
+`contrib/ivorysql_ora/src/builtin_functions/datetime_datatype_functions.c`, placed right next to the existing `ora_sessiontimezone()`:
+
+[source,c]
+----
+/*
+ * returns the time zone of the database, as set by
+ * ivorysql.dbtimezone. Unlike sessiontimezone(), this value is
+ * independent of the session's TimeZone setting.
+ */
+Datum
+ora_dbtimezone(PG_FUNCTION_ARGS)
+{
+    PG_RETURN_TEXT_P(cstring_to_text(ivorysql_dbtimezone));
+}
+----
+
+Whereas `ora_sessiontimezone()` reads `session_timezone` (a session-level `pg_tz *`), `ora_dbtimezone()` directly reads the GUC string defined in Layer 1.
+
+==== Catalog Declaration: `sys.dbtimezone()`
+
+`contrib/ivorysql_ora/src/builtin_functions/builtin_functions--1.0.sql`, placed right next to `sys.sessiontimezone()`:
+
+[source,sql]
+----
+CREATE FUNCTION sys.dbtimezone()
+RETURNS text
+AS 'MODULE_PATHNAME','ora_dbtimezone'
+LANGUAGE C
+STRICT
+STABLE;
+----
+
+Marked as `STABLE` rather than `IMMUTABLE`: the return value may change due to `ALTER DATABASE ... SET` (even though it will not change within a single connection), consistent with how `sessiontimezone()` is marked. This function is ultimately distributed as part of the extension script `ivorysql_ora--1.0.sql`.
+
+=== Relationship with PG_PARSER
+
+Unlike a new statement such as `ALTER INDEX ... UNUSABLE`, which exists only at the Oracle syntax layer, `dbtimezone()` is an ordinary SQL function whose syntax is not restricted by `compatible_db`/`ivorysql.compatible_mode`: `sys.dbtimezone()` can be called explicitly, schema-qualified, under any parsing mode. Only when calling it via the bare function name `dbtimezone()` (relying on `search_path` to resolve to the `sys` schema) does behavior become related to the Oracle-compatible-mode `search_path` behavior — this is a visibility concern of the `sys` schema itself, not something specific to this feature.
+
+== Error Handling
+
+=== In-Session SET Is Rejected
+
+[source,sql]
+----
+SET ivorysql.dbtimezone = '+08:00';
+-- ERROR:  parameter "ivorysql.dbtimezone" cannot be set
+-- DETAIL:  "ivorysql.dbtimezone" can only be set with ALTER DATABASE ... SET, not within a session or per-role.
+----
+This error is actively raised by the `source == PGC_S_SESSION` branch in `check_dbtimezone()`.
+
+=== ALTER ROLE ... SET Is Rejected Directly at the Command Level
+
+[source,sql]
+----
+ALTER ROLE myrole IN DATABASE mydb SET ivorysql.dbtimezone = '+09:00';
+-- ERROR:  parameter "ivorysql.dbtimezone" cannot be set
+-- DETAIL:  "ivorysql.dbtimezone" can only be set with ALTER DATABASE ... SET, not within a session or per-role.
+-- HINT:    Use ALTER DATABASE ... SET ivorysql.dbtimezone instead, or ALTER ROLE ... RESET ivorysql.dbtimezone to remove a stale per-role override.
+
+ALTER ROLE myrole SET ivorysql.dbtimezone = '+09:00';   -- Also errors
+ALTER ROLE ALL SET ivorysql.dbtimezone = '+09:00';      -- Also errors
+
+ALTER ROLE myrole IN DATABASE mydb RESET ivorysql.dbtimezone;  -- OK, unaffected
+----
+This error is raised directly at the parse-tree level by `reject_alter_role_dbtimezone()` (Layer 2, the `ProcessUtility_hook` in `ivorysql_ora.c`), before the command actually executes and before `pg_db_role_setting` is written to. See the "Command-Level Interception" section above for details.
+
+=== Invalid Value / Out-of-Range Offset Errors Out at the ALTER DATABASE Stage
+
+[source,sql]
+----
+ALTER DATABASE mydb SET ivorysql.dbtimezone = 'not_a_zone';
+-- ERROR:  invalid value for parameter "ivorysql.dbtimezone": "not_a_zone"
+-- DETAIL:  "not_a_zone" is not a valid UTC offset (+/-HH:MI) or time zone name.
+
+ALTER DATABASE mydb SET ivorysql.dbtimezone = '+15:00';
+-- ERROR:  invalid value for parameter "ivorysql.dbtimezone": "+15:00"
+-- DETAIL:  time zone offset "+15:00" is out of range for DBTIMEZONE (-12:59 to +14:00)
+----
+This error comes from the offset/region-name format validation branch of `check_dbtimezone()`, which falls through to the default `invalid value for parameter` message (since `GUC_check_errmsg` is not set).
+
+=== An Unauthorized Ordinary User Executing ALTER DATABASE
+
+[source,sql]
+----
+\c mydb normal_user
+ALTER DATABASE mydb SET ivorysql.dbtimezone = '+08:00';
+-- ERROR:  permission denied to set parameter "ivorysql.dbtimezone"
+----
+Since `context = PGC_SUSET` and `normal_user` has not been granted permission via `GRANT SET ON PARAMETER`, the permission check fails before `check_dbtimezone()` is even reached, so the error message is PostgreSQL's generic GUC permission error, not a custom error message from this feature.
+
+== Known Limitations
+
+1. **Does not go through Oracle's `CREATE DATABASE ... TIME_ZONE` syntax**: Currently the value can only be set via PostgreSQL's native `ALTER DATABASE ... SET`; no corresponding `CREATE/ALTER DATABASE ... SET TIME_ZONE` compatible keyword syntax has been added at IvorySQL's Oracle syntax layer (`ora_gram.y`).
+2. **No fine-grained distinction between offset and region-name formats**: Oracle actually has subtle differences in the allowed ranges of offsets and region names between `DBTIMEZONE` (database-level) and `SESSIONTIMEZONE`/`TIME_ZONE` (session-level); for simplicity, this implementation treats "either an offset or a region name" uniformly.

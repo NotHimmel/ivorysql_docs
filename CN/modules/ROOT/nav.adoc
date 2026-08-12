@@ -110,12 +110,12 @@
 **** xref:master/compatibility_features_design/with_function_procedure_impl.adoc[WITH FUNCTION/PROCEDURE]
 **** xref:master/compatibility_features_design/create_index_online.adoc[索引 ONLINE 参数]
 **** xref:master/compatibility_features_design/alter_index_unusable_impl.adoc[禁用索引]
-**** xref:master/compatibility_features_design/dbtimezone_impl.adoc[dbtimezone]
 *** 内置函数
 **** xref:master/oracle_builtin_functions/sys_context.adoc[sys_context]
 **** xref:master/oracle_builtin_functions/userenv.adoc[userenv]
 **** xref:master/oracle_builtin_functions/rawtohex.adoc[rawtohex]
 **** xref:master/oracle_builtin_functions/stragg.adoc[stragg]
+**** xref:master/oracle_builtin_functions/dbtimezone_impl.adoc[dbtimezone]
 *** xref:master/gb18030.adoc[国标GB18030]
 * 参考指南
 ** xref:master/tools_reference.adoc[工具参考]

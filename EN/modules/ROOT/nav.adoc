@@ -110,12 +110,12 @@
 *** xref:master/compatibility_features_design/with_function_procedure_impl_en.adoc[WITH FUNCTION/PROCEDURE]
 *** xref:master/compatibility_features_design/create_index_online.adoc[ONLINE Parameter for CREATE INDEX]
 *** xref:master/compatibility_features_design/alter_index_unusable_impl_en.adoc[Alter Index Unusable]
-*** xref:master/compatibility_features_design/dbtimezone_impl_en.adoc[dbtimezone]
 ** Built-in Functions
 *** xref:master/oracle_builtin_functions/sys_context.adoc[sys_context]
 *** xref:master/oracle_builtin_functions/userenv.adoc[userenv]
 *** xref:master/oracle_builtin_functions/rawtohex.adoc[rawtohex]
 *** xref:master/oracle_builtin_functions/stragg.adoc[stragg]
+*** xref:master/oracle_builtin_functions/dbtimezone_impl_en.adoc[dbtimezone]
 ** xref:master/gb18030.adoc[GB18030 Character Set]
 * Reference
 ** xref:master/tools_reference.adoc[Tool Reference]

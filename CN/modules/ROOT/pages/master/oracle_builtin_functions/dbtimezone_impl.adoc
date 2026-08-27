@@ -1,0 +1,310 @@
+:sectnums:
+:sectnumlevels: 5
+
+= DBTIMEZONE 实现说明
+
+== 目的
+
+本文档详细说明 IvorySQL 中 `DBTIMEZONE` 函数功能的实现原理。该功能提供一个数据库级、非会话级的固定时区值，通过 PostgreSQL 原生的 `ALTER DATABASE ... SET` 机制持久化，实现 Oracle 数据库 `DBTIMEZONE` 函数的语义。
+
+== 实现说明
+
+=== 系统分层架构
+
+`DBTIMEZONE` 的实现分为四个层次，均位于 `contrib/ivorysql_ora`：
+
+```
+┌───────────────────────────────────────────────────────────┐
+│  Layer 1: GUC 定义与权限层 (src/guc/guc.c + src/include/guc.h)│
+│  ─ 新增自定义 GUC ivorysql.dbtimezone（PGC_SUSET）           │
+│  ─ check_dbtimezone()：按 GucSource 拒绝会话内 SET/ALTER ROLE,│
+│    只允许 ALTER DATABASE ... SET；并校验偏移/区域名格式        │
+└───────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────┐
+│  Layer 2: 命令层拦截 (src/ivorysql_ora.c)                    │
+│  ─ ivorysql_ora_ProcessUtility()（既有 ProcessUtility_hook）│
+│    新增 reject_alter_role_dbtimezone()：在解析树层面直接      │
+│    拦截 ALTER ROLE ... SET/ALTER ROLE ALL SET，早于 Layer 1  │
+│    的 check hook 生效，命令本身直接报错，不留 catalog 残留     │
+└───────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────┐
+│  Layer 3: C 函数层 (src/builtin_functions/                  │
+│           datetime_datatype_functions.c)                    │
+│  ─ ora_dbtimezone()：读取 ivorysql_dbtimezone 变量并返回 text │
+│    与既有的 ora_sessiontimezone()（读取 session_timezone）    │
+│    紧邻，实现方式一致、语义刻意区分                            │
+└───────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────┐
+│  Layer 4: SQL 目录层                                        │
+│  (src/builtin_functions/builtin_functions--1.0.sql)          │
+│  ─ CREATE FUNCTION sys.dbtimezone() ... STABLE               │
+│    紧邻既有的 sys.sessiontimezone()                          │
+└───────────────────────────────────────────────────────────┘
+```
+
+本功能没有新增语法（不需要 Oracle 解析器/AST/目录列层面的改动）——`dbtimezone()` 是一个普通的 `STABLE` SQL 函数，配合一个自定义 GUC，复用 PostgreSQL 已有的 per-database 配置机制即可实现。
+
+=== 设计方案：新增 GUC
+
+GUC 本身不是"per-database 专属存储"，而是复用了 PostgreSQL 对任意 GUC 都支持的 `ALTER DATABASE/ROLE ... SET` 通用机制（持久化在 `pg_db_role_setting` 系统表），没有为 `DBTIMEZONE` 单独设计目录字段。
+
+=== GUC 定义与权限模型
+
+==== 命名规范
+
+GUC 名为 `ivorysql.dbtimezone`，与项目现有自定义 GUC 命名惯例保持一致。对应的 C 端变量为 `ivorysql_dbtimezone`。
+
+==== 权限模型：只能通过 ALTER DATABASE 设置
+
+`ALTER DATABASE dbname SET <guc> = value` 实际上有两层独立的权限检查：数据库对象本身的权限（是否有权 `ALTER` 这个库，owner 或超级用户即可）与 GUC 参数本身的权限（是否允许"设置"这个参数，与是否拥有该数据库无关）。`ivorysql.dbtimezone` 的 `context` 设为 `PGC_SUSET`，因此第二层默认只有超级用户能通过；若需要委派给普通角色，超级用户需额外执行 `GRANT SET ON PARAMETER ivorysql.dbtimezone TO <role>;`（对应 PostgreSQL 15+ 引入的 `pg_parameter_acl` 目录）。
+
+仅设置 `context = PGC_SUSET` 不足以区分"会话内 `SET`"和"`ALTER DATABASE ... SET`"——两者内部同样以 `PGC_SUSET` 身份调用 `set_config_option()`。真正能区分调用来源的是 check hook 收到的 `GucSource source` 参数：
+
+[cols="2,3,1"]
+|===
+| `GucSource` | 触发场景 | 是否允许
+
+| `PGC_S_SESSION`
+| 会话内 `SET ivorysql.dbtimezone = ...;`
+| 拒绝
+
+| `PGC_S_USER`
+| `ALTER ROLE rolename SET ...`（不区分数据库）
+| 拒绝
+
+| `PGC_S_DATABASE_USER`
+| `ALTER ROLE rolename IN DATABASE dbname SET ...`
+| 拒绝
+
+| `PGC_S_CLIENT`
+| 客户端连接选项（如 `PGOPTIONS`）
+| 拒绝
+
+| `PGC_S_GLOBAL`
+| `ALTER ROLE ALL SET ...`（全局默认）
+| 拒绝
+
+| `PGC_S_DATABASE`
+| `ALTER DATABASE dbname SET ...` 在连接建立时生效
+| 允许
+
+| `PGC_S_TEST`
+| 执行 `ALTER DATABASE ... SET` 命令本身时的校验阶段
+| 允许（否则命令本身都执行不了）
+
+| `PGC_S_DEFAULT` / `PGC_S_DYNAMIC_DEFAULT` / `PGC_S_FILE` / `PGC_S_ARGV` / `PGC_S_ENV_VAR`
+| 启动默认值、`postgresql.conf`、`postmaster` 命令行/环境变量
+| 允许（保证集群启动不受影响）
+
+| `PGC_S_OVERRIDE`
+| 重放一个已校验过的值（如并行 worker 同步）
+| 允许（否则并行查询会报错）
+|===
+
+==== `check_dbtimezone()` 实现
+
+`contrib/ivorysql_ora/src/guc/guc.c`：
+
+[source,c]
+----
+/* Backing variable for ivorysql.dbtimezone, read by dbtimezone(). */
+char       *ivorysql_dbtimezone = NULL;
+
+static bool
+check_dbtimezone(char **newval, void **extra, GucSource source)
+{
+    char       *str = *newval;
+
+    if (source == PGC_S_SESSION ||
+        source == PGC_S_USER ||
+        source == PGC_S_DATABASE_USER ||
+        source == PGC_S_CLIENT ||
+        source == PGC_S_GLOBAL)
+    {
+        GUC_check_errcode(ERRCODE_CANT_CHANGE_RUNTIME_PARAM);
+        GUC_check_errmsg("parameter \"ivorysql.dbtimezone\" cannot be set");
+        GUC_check_errdetail("\"ivorysql.dbtimezone\" can only be set with "
+                             "ALTER DATABASE ... SET, not within a session "
+                             "or per-role.");
+        return false;
+    }
+
+    /* [+-]HH:MI 格式校验，范围 -12:59 ~ +14:00（与 Oracle 一致） */
+    if (strlen(str) == 6 && ... )
+    {
+        ...
+    }
+
+    /* 否则必须是合法的时区区域名（复用 pg_tzset() 校验） */
+    if (!pg_tzset(str))
+    {
+        GUC_check_errdetail("\"%s\" is not a valid UTC offset (+/-HH:MI) "
+                             "or time zone name.", str);
+        return false;
+    }
+
+    return true;
+}
+
+void
+IvorysqlOraDefineGucs(void)
+{
+    DefineCustomStringVariable("ivorysql.dbtimezone",
+                                "Sets the database time zone reported by dbtimezone().",
+                                "Can only be set with ALTER DATABASE ... SET, not with a "
+                                "plain SET or ALTER ROLE ... SET. Requires superuser, or a "
+                                "role granted permission via "
+                                "GRANT SET ON PARAMETER ivorysql.dbtimezone TO <role>.",
+                                &ivorysql_dbtimezone,
+                                "+00:00",
+                                PGC_SUSET,
+                                0,
+                                check_dbtimezone,
+                                NULL,
+                                NULL);
+}
+----
+
+`GUC_check_errcode(ERRCODE_CANT_CHANGE_RUNTIME_PARAM)` + `GUC_check_errmsg(...)` 把会话内 `SET` 被拒绝时的报错改成 `parameter "ivorysql.dbtimezone" cannot be set`，而非泛用的 `invalid value for parameter ...: "..."` ——这类拒绝的原因是"这个参数不能这样设置"而不是"这个值不合法"，用专门的 errcode/errmsg 更准确地表达语义；格式/范围校验失败（`GUC_check_errdetail` 但不设 `GUC_check_errmsg`）则仍走默认的 `invalid value for parameter` 提示。
+
+=== 命令层拦截：`ALTER ROLE ... SET` 
+
+`contrib/ivorysql_ora/src/ivorysql_ora.c` 已有一个 `ProcessUtility_hook`，在其中新增：
+
+[source,c]
+----
+static void
+reject_alter_role_dbtimezone(Node *parsetree)
+{
+    AlterRoleSetStmt *stmt;
+    VariableSetStmt *setstmt;
+
+    if (nodeTag(parsetree) != T_AlterRoleSetStmt)
+        return;
+
+    stmt = (AlterRoleSetStmt *) parsetree;
+    setstmt = stmt->setstmt;
+
+    if (setstmt == NULL || setstmt->name == NULL)
+        return;                 /* RESET ALL, or malformed */
+
+    if (setstmt->kind == VAR_RESET || setstmt->kind == VAR_RESET_ALL)
+        return;                 /* clearing an override is always fine */
+
+    if (pg_strcasecmp(setstmt->name, "ivorysql.dbtimezone") == 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_CANT_CHANGE_RUNTIME_PARAM),
+                 errmsg("parameter \"ivorysql.dbtimezone\" cannot be set"),
+                 errdetail("\"ivorysql.dbtimezone\" can only be set with "
+                           "ALTER DATABASE ... SET, not within a session "
+                           "or per-role."),
+                 errhint("Use ALTER DATABASE ... SET ivorysql.dbtimezone "
+                         "instead, or ALTER ROLE ... RESET "
+                         "ivorysql.dbtimezone to remove a stale per-role "
+                         "override.")));
+}
+----
+
+并在 `ivorysql_ora_ProcessUtility()` 里，调用 `standard_ProcessUtility()`（或上一个已安装的 hook）之前插入这个检查——命令一旦匹配就直接 `ereport(ERROR, ...)`，`ALTER ROLE` 不会被执行到写 catalog 那一步。
+
+=== SQL 函数层
+
+==== `ora_dbtimezone()` C 函数
+
+`contrib/ivorysql_ora/src/builtin_functions/datetime_datatype_functions.c`，紧邻既有的 `ora_sessiontimezone()`：
+
+[source,c]
+----
+/*
+ * returns the time zone of the database, as set by
+ * ivorysql.dbtimezone. Unlike sessiontimezone(), this value is
+ * independent of the session's TimeZone setting.
+ */
+Datum
+ora_dbtimezone(PG_FUNCTION_ARGS)
+{
+    PG_RETURN_TEXT_P(cstring_to_text(ivorysql_dbtimezone));
+}
+----
+
+对比 `ora_sessiontimezone()` 读取的是 `session_timezone`（会话级 `pg_tz *`），`ora_dbtimezone()` 直接读取 Layer 1 定义的 GUC 字符串。
+
+==== 目录声明 `sys.dbtimezone()`
+
+`contrib/ivorysql_ora/src/builtin_functions/builtin_functions--1.0.sql`，紧邻 `sys.sessiontimezone()`：
+
+[source,sql]
+----
+CREATE FUNCTION sys.dbtimezone()
+RETURNS text
+AS 'MODULE_PATHNAME','ora_dbtimezone'
+LANGUAGE C
+STRICT
+STABLE;
+----
+
+标记为 `STABLE` 而非 `IMMUTABLE`：返回值可能因 `ALTER DATABASE ... SET` 而改变（虽然一次连接内不会变），与 `sessiontimezone()` 的标记方式保持一致。该函数最终随扩展脚本 `ivorysql_ora--1.0.sql`分发。
+
+=== 与 PG_PARSER 的关系
+
+不同于 `ALTER INDEX ... UNUSABLE` 那种只存在于 Oracle 语法层的新语句，`dbtimezone()` 是普通的 SQL 函数，语法上不受 `compatible_db`/`ivorysql.compatible_mode` 限制：任何解析模式下都可以用 `sys.dbtimezone()` 显式限定调用；只有以裸函数名 `dbtimezone()` 调用（依赖 `search_path` 能解析到 `sys` 模式）时才与 Oracle 兼容模式的 search_path 行为相关，这属于 `sys` schema 本身的可见性问题，非本功能特有。
+
+== 错误处理
+
+=== 会话内 SET 被拒绝
+
+[source,sql]
+----
+SET ivorysql.dbtimezone = '+08:00';
+-- ERROR:  parameter "ivorysql.dbtimezone" cannot be set
+-- DETAIL:  "ivorysql.dbtimezone" can only be set with ALTER DATABASE ... SET, not within a session or per-role.
+----
+错误由 `check_dbtimezone()` 中 `source == PGC_S_SESSION` 分支主动抛出。
+
+=== ALTER ROLE ... SET 在命令层直接被拒绝
+
+[source,sql]
+----
+ALTER ROLE myrole IN DATABASE mydb SET ivorysql.dbtimezone = '+09:00';
+-- ERROR:  parameter "ivorysql.dbtimezone" cannot be set
+-- DETAIL:  "ivorysql.dbtimezone" can only be set with ALTER DATABASE ... SET, not within a session or per-role.
+-- HINT:    Use ALTER DATABASE ... SET ivorysql.dbtimezone instead, or ALTER ROLE ... RESET ivorysql.dbtimezone to remove a stale per-role override.
+
+ALTER ROLE myrole SET ivorysql.dbtimezone = '+09:00';   -- 同样报错
+ALTER ROLE ALL SET ivorysql.dbtimezone = '+09:00';      -- 同样报错
+
+ALTER ROLE myrole IN DATABASE mydb RESET ivorysql.dbtimezone;  -- OK，不受影响
+----
+错误由 `reject_alter_role_dbtimezone()`（Layer 2，`ivorysql_ora.c` 的 `ProcessUtility_hook`）在解析树层面直接抛出，早于命令真正执行、早于 `pg_db_role_setting` 被写入。详见上文"命令层拦截"小节。
+
+=== 非法值 / 超出范围偏移在 ALTER DATABASE 阶段即报错
+
+[source,sql]
+----
+ALTER DATABASE mydb SET ivorysql.dbtimezone = 'not_a_zone';
+-- ERROR:  invalid value for parameter "ivorysql.dbtimezone": "not_a_zone"
+-- DETAIL:  "not_a_zone" is not a valid UTC offset (+/-HH:MI) or time zone name.
+
+ALTER DATABASE mydb SET ivorysql.dbtimezone = '+15:00';
+-- ERROR:  invalid value for parameter "ivorysql.dbtimezone": "+15:00"
+-- DETAIL:  time zone offset "+15:00" is out of range for DBTIMEZONE (-12:59 to +14:00)
+----
+错误来自 `check_dbtimezone()` 的偏移/区域名格式校验分支，走默认的 `invalid value for parameter` 文案（未设置 `GUC_check_errmsg`）。
+
+=== 未授权的普通用户执行 ALTER DATABASE
+
+[source,sql]
+----
+\c mydb normal_user
+ALTER DATABASE mydb SET ivorysql.dbtimezone = '+08:00';
+-- ERROR:  permission denied to set parameter "ivorysql.dbtimezone"
+----
+`context = PGC_SUSET` 且 `normal_user` 未被 `GRANT SET ON PARAMETER` 授权，权限检查在到达 `check_dbtimezone()` 之前就失败，因此报错文案是 PostgreSQL 通用的 GUC 权限错误，而非本功能自定义的错误信息。
+
+== 已知限制
+
+1. **未走 Oracle 的 `CREATE DATABASE ... TIME_ZONE` 语法**：当前只能通过 PostgreSQL 原生的 `ALTER DATABASE ... SET` 设置，没有在 IvorySQL 的 Oracle 语法层（`ora_gram.y`）增加对应的 `CREATE/ALTER DATABASE ... SET TIME_ZONE` 关键字兼容写法。
+2. **偏移 / 区域名格式未做精细区分**：Oracle 实际上对 `DBTIMEZONE`（数据库级）和 `SESSIONTIMEZONE`/`TIME_ZONE`（会话级）在偏移与区域名的允许范围上有细节差异，本实现为简化起见统一按"偏移或区域名皆可"处理。
